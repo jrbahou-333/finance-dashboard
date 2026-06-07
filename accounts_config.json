@@ -1,0 +1,13 @@
+{
+  "active": [
+    "Chase",
+    "Credit",
+    "Crypto",
+    "Debit (Revolut)",
+    "Moneybox (LISA)",
+    "Monzo (Savings)",
+    "Monzo (Spend)",
+    "S&S ISA"
+  ],
+  "removed": []
+}
