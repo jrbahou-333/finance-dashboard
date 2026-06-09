@@ -208,6 +208,19 @@ elif page == "Cash Flow & Pinch Points":
 
     st.divider()
 
+    # Build rich hover text for one-off bar (itemised per month)
+    oo_all = d.get_one_off_expenses()
+    oo_hover_texts = []
+    for _, row in cf.iterrows():
+        month = row["date"].to_period("M")
+        items = oo_all[oo_all["date"].dt.to_period("M") == month]
+        if items.empty or row["one_off_expenses"] == 0:
+            oo_hover_texts.append("  None")
+        else:
+            oo_hover_texts.append(
+                "<br>".join(f"  {r['reason']}: £{r['amount']:,.0f}" for _, r in items.iterrows())
+            )
+
     # Stacked bar: monthly + one-off spend, vs income line
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -220,7 +233,11 @@ elif page == "Cash Flow & Pinch Points":
         x=cf["date"], y=cf["one_off_expenses"],
         name="One-off Expenses",
         marker_color="#C44E52",
-        hovertemplate="One-off: £%{y:,.0f}<extra></extra>",
+        customdata=oo_hover_texts,
+        hovertemplate=(
+            "<b>One-off Expenses</b><br>%{customdata}"
+            "<br><b>Total: £%{y:,.0f}</b><extra></extra>"
+        ),
     ))
     fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["income"],
