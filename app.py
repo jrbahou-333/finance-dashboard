@@ -85,9 +85,7 @@ with st.sidebar:
 # PAGE 1 — NET WORTH
 # ============================================================
 if page == "Net Worth":
-    col_hdr, col_btn = st.columns([6, 1])
-    col_hdr.header("Net Worth")
-    col_btn.button("Manage investments", on_click=_go_to, args=("Manage Investments",), use_container_width=True)
+    st.header("Net Worth")
 
     df = nws.copy()
     pivot = df.pivot_table(index="date", columns="account", values="amount", aggfunc="sum").fillna(0)
@@ -131,7 +129,9 @@ if page == "Net Worth":
     # Latest breakdown
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.subheader("Latest Snapshot")
+        sub_hdr, sub_btn = st.columns([2, 1])
+        sub_hdr.subheader("Latest Snapshot")
+        sub_btn.button("+ Update balances", on_click=_go_to, args=("Manage Investments",), use_container_width=True, type="primary")
         latest_df = (
             nws[nws["date"] == latest_date]
             .set_index("account")[["amount"]]
@@ -276,9 +276,9 @@ elif page == "Cash Flow & Pinch Points":
     st.plotly_chart(fig2, use_container_width=True)
 
     # One-off expense timeline
-    col_hdr, col_btn = st.columns([6, 1])
+    col_hdr, col_btn = st.columns([4, 1])
     col_hdr.subheader("Upcoming One-off Expenses")
-    col_btn.button("Manage expenses", on_click=_go_to, args=("Manage Expenses",), use_container_width=True)
+    col_btn.button("+ Add / edit", on_click=_go_to, args=("Manage Expenses",), use_container_width=True, type="primary")
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
