@@ -40,6 +40,11 @@ CATEGORY_COLORS = {
 }
 
 
+def _go_to(page_value):
+    st.session_state["nav_section"] = "Manage Data"
+    st.session_state["nav_page_manage"] = page_value
+
+
 # ============================================================
 # SIDEBAR
 # ============================================================
@@ -49,11 +54,11 @@ with st.sidebar:
     ANALYTICS_PAGES = ["Net Worth", "Cash Flow & Pinch Points", "Projection vs Actuals", "Goals & Summary"]
     MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
 
-    section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True)
+    section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
     if section == "Insights":
-        page = st.radio("Navigate", ANALYTICS_PAGES, label_visibility="collapsed")
+        page = st.radio("Navigate", ANALYTICS_PAGES, label_visibility="collapsed", key="nav_page_insights")
     else:
-        page = st.radio("Navigate", MANAGE_PAGES, label_visibility="collapsed")
+        page = st.radio("Navigate", MANAGE_PAGES, label_visibility="collapsed", key="nav_page_manage")
     st.divider()
 
     # Quick stats
@@ -80,7 +85,9 @@ with st.sidebar:
 # PAGE 1 — NET WORTH
 # ============================================================
 if page == "Net Worth":
-    st.header("Net Worth")
+    col_hdr, col_btn = st.columns([6, 1])
+    col_hdr.header("Net Worth")
+    col_btn.button("Manage investments", on_click=_go_to, args=("Manage Investments",), use_container_width=True)
 
     df = nws.copy()
     pivot = df.pivot_table(index="date", columns="account", values="amount", aggfunc="sum").fillna(0)
@@ -269,7 +276,9 @@ elif page == "Cash Flow & Pinch Points":
     st.plotly_chart(fig2, use_container_width=True)
 
     # One-off expense timeline
-    st.subheader("Upcoming One-off Expenses")
+    col_hdr, col_btn = st.columns([6, 1])
+    col_hdr.subheader("Upcoming One-off Expenses")
+    col_btn.button("Manage expenses", on_click=_go_to, args=("Manage Expenses",), use_container_width=True)
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 

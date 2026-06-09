@@ -1,0 +1,16 @@
+date,account,amount
+2025-01-01,Cash (Current),1200
+2025-01-01,Cash (Savings),5000
+2025-01-01,Stocks & Shares ISA,8000
+2025-01-01,Crypto,500
+2025-01-01,Pension,3000
+2025-02-01,Cash (Current),1400
+2025-02-01,Cash (Savings),5200
+2025-02-01,Stocks & Shares ISA,8300
+2025-02-01,Crypto,480
+2025-02-01,Pension,3100
+2025-03-01,Cash (Current),1300
+2025-03-01,Cash (Savings),5500
+2025-03-01,Stocks & Shares ISA,8700
+2025-03-01,Crypto,520
+2025-03-01,Pension,3200

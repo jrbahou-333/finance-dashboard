@@ -4,8 +4,14 @@ __pycache__/
 .DS_Store
 
 # --- Personal financial data — never commit ---
-ECONOMIC EVALUATION.xlsx
-one_off_expenses.csv
-accounts_config.json
-manual_snapshots.csv
+/ECONOMIC EVALUATION.xlsx
+/one_off_expenses.csv
+/accounts_config.json
+/manual_snapshots.csv
+/net_worth_snapshots.csv
+/cash_flow.csv
+/monthly_expenses.csv
+/projections.csv
+/goals.csv
+/pension.json
 world_cup_picker.html
