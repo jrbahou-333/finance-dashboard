@@ -232,7 +232,7 @@ elif page == "Cash Flow & Pinch Points":
     ))
     fig.update_layout(
         barmode="stack",
-        title="Monthly Spend vs Income",
+        title="Monthly Spend vs Income  ·  click a bar to drill down",
         xaxis_title=None,
         yaxis_title="£",
         hovermode="x unified",
@@ -241,7 +241,67 @@ elif page == "Cash Flow & Pinch Points":
         template="plotly_dark",
         margin=dict(t=40, b=10),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    chart_event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode="points")
+
+    # --- Drill-down panel ---
+    selected_points = (chart_event.selection.points if chart_event and chart_event.selection else [])
+    if selected_points:
+        raw_x = selected_points[0].get("x")
+        try:
+            drill_month = pd.Timestamp(raw_x).to_period("M")
+        except Exception:
+            drill_month = None
+
+        if drill_month is not None:
+            drill_label = drill_month.strftime("%B %Y")
+            st.markdown(f"### Drill-down — {drill_label}")
+
+            oo_all = d.get_one_off_expenses()
+            oo_month = oo_all[oo_all["date"].dt.to_period("M") == drill_month].copy()
+
+            dcol1, dcol2 = st.columns(2)
+
+            with dcol1:
+                st.markdown("**Recurring expenses**")
+                rec = d.MONTHLY_EXPENSES.copy()
+                fig_drill_rec = px.pie(
+                    rec, values="amount", names="category",
+                    hole=0.4,
+                    title=f"Recurring — £{rec['amount'].sum():,.0f}",
+                )
+                fig_drill_rec.update_traces(textposition="outside", textinfo="label+value")
+                fig_drill_rec.update_layout(
+                    showlegend=False, template="plotly_dark", height=300,
+                    margin=dict(t=40, b=10, l=10, r=10),
+                )
+                st.plotly_chart(fig_drill_rec, use_container_width=True)
+
+            with dcol2:
+                st.markdown("**One-off expenses**")
+                if oo_month.empty:
+                    st.info("No one-off expenses in this month.")
+                else:
+                    total_oo = oo_month["amount"].sum()
+                    st.caption(f"Total: £{total_oo:,.0f}")
+                    fig_drill_oo = px.bar(
+                        oo_month.sort_values("amount", ascending=True),
+                        x="amount", y="reason", orientation="h",
+                        color="category", color_discrete_map=CATEGORY_COLORS,
+                        labels={"amount": "£", "reason": "", "category": "Category"},
+                        title=f"One-off — £{total_oo:,.0f}",
+                    )
+                    fig_drill_oo.update_layout(
+                        template="plotly_dark", height=300, showlegend=False,
+                        margin=dict(t=40, b=10, l=10, r=10),
+                    )
+                    st.plotly_chart(fig_drill_oo, use_container_width=True)
+
+                    display_oo = oo_month[["reason", "category", "amount", "note"]].copy()
+                    display_oo["amount"] = display_oo["amount"].map(lambda x: f"£{x:,.0f}")
+                    display_oo.columns = ["Reason", "Category", "Amount", "Note"]
+                    st.dataframe(display_oo, use_container_width=True, hide_index=True)
+
+            st.divider()
 
     # Running cash balance — pinch points
     fig2 = go.Figure()
