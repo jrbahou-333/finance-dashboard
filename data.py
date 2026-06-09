@@ -14,6 +14,7 @@ EXCEL_PATH = "ECONOMIC EVALUATION.xlsx"
 # small local files so the original Excel is never modified by the app.
 MANUAL_SNAPSHOTS_PATH = "manual_snapshots.csv"
 ACCOUNTS_CONFIG_PATH = "accounts_config.json"
+ONE_OFF_EXPENSES_PATH = "one_off_expenses.csv"
 
 
 def _load_workbook():
@@ -118,6 +119,67 @@ def _load_one_off_expenses():
 
 
 # ---------------------------------------------------------------------------
+# ONE-OFF EXPENSES — editable store
+# Seeded once from the Excel "Other Expenditure" sheet into one_off_expenses.csv,
+# then managed entirely through the app (Excel is never modified).
+# ---------------------------------------------------------------------------
+_ONE_OFF_COLUMNS = ["reason", "category", "date", "amount", "note"]
+
+
+def _seed_one_off_expenses():
+    df = _load_one_off_expenses()
+    df.to_csv(ONE_OFF_EXPENSES_PATH, index=False)
+    return df
+
+
+def load_one_off_expenses():
+    if os.path.exists(ONE_OFF_EXPENSES_PATH):
+        df = pd.read_csv(ONE_OFF_EXPENSES_PATH, parse_dates=["date"])
+        df["note"] = df["note"].where(df["note"].notna(), None)
+        return df[_ONE_OFF_COLUMNS]
+    return _seed_one_off_expenses()
+
+
+def _save_one_off_expenses(df):
+    df = df[_ONE_OFF_COLUMNS].sort_values("date").reset_index(drop=True)
+    df.to_csv(ONE_OFF_EXPENSES_PATH, index=False)
+    return df
+
+
+def add_one_off_expense(reason, category, date, amount, note=None):
+    df = load_one_off_expenses()
+    new_row = pd.DataFrame([{
+        "reason": reason, "category": category,
+        "date": pd.Timestamp(date), "amount": amount,
+        "note": note or None,
+    }])
+    df = pd.concat([df, new_row], ignore_index=True)
+    _save_one_off_expenses(df)
+
+
+def update_one_off_expense(row_id, reason, category, date, amount, note=None):
+    df = load_one_off_expenses()
+    if row_id not in df.index:
+        return False
+    df.loc[row_id] = {
+        "reason": reason, "category": category,
+        "date": pd.Timestamp(date), "amount": amount,
+        "note": note or None,
+    }
+    _save_one_off_expenses(df)
+    return True
+
+
+def delete_one_off_expense(row_id):
+    df = load_one_off_expenses()
+    if row_id not in df.index:
+        return False
+    df = df.drop(index=row_id)
+    _save_one_off_expenses(df)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # CASH FLOW — monthly income vs spend
 # Sheet: Calcs
 # ---------------------------------------------------------------------------
@@ -147,6 +209,42 @@ def _load_cash_flow():
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
     df["total_expenses"] = df["monthly_expenses"] + df["one_off_expenses"]
+    return df
+
+
+def get_cash_flow():
+    """
+    Cash flow recomputed live: recurring monthly expenses + the *editable*
+    one-off expenses store, so adding/editing one-off expenses immediately
+    flows through to the Cash Flow & Pinch Points charts. Historical income
+    figures are kept from the Excel Calcs sheet (income varies month to
+    month); months without a recorded income fall back to the latest known
+    monthly income.
+    """
+    base = _load_cash_flow()
+    oo = load_one_off_expenses()
+    monthly_total = _load_monthly_expenses()["amount"].sum()
+
+    base_periods = base["date"].dt.to_period("M")
+    income_lookup = dict(zip(base_periods, base["income"]))
+    latest_income = base["income"].iloc[-1] if len(base) else _load_monthly_income()
+
+    oo_periods = oo["date"].dt.to_period("M") if len(oo) else pd.Series([], dtype="period[M]")
+    one_off_by_month = oo.groupby(oo_periods)["amount"].sum() if len(oo) else pd.Series(dtype=float)
+
+    months = sorted(set(base_periods) | set(oo_periods))
+    rows = []
+    for m in months:
+        rows.append({
+            "date": m.to_timestamp(),
+            "monthly_expenses": monthly_total,
+            "one_off_expenses": float(one_off_by_month.get(m, 0)),
+            "income": income_lookup.get(m, latest_income),
+        })
+    df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+    df["total_expenses"] = df["monthly_expenses"] + df["one_off_expenses"]
+    df["remaining"] = df["income"] - df["total_expenses"]
+    df["cumulative"] = df["remaining"].cumsum()
     return df
 
 
@@ -342,10 +440,15 @@ def get_net_worth_snapshots():
     return combined.sort_values("date").reset_index(drop=True)
 
 
+def get_one_off_expenses():
+    """Editable one-off expenses (seeded from Excel, then app-managed)."""
+    return load_one_off_expenses()
+
+
 NET_WORTH_SNAPSHOTS = get_net_worth_snapshots()
 MONTHLY_INCOME      = _load_monthly_income()
 MONTHLY_EXPENSES    = _load_monthly_expenses()
-ONE_OFF_EXPENSES    = _load_one_off_expenses()
+ONE_OFF_EXPENSES    = get_one_off_expenses()
 CASH_FLOW           = _load_cash_flow()
 PROJECTIONS         = _load_projections()
 GOALS               = _load_goals()

@@ -46,11 +46,14 @@ CATEGORY_COLORS = {
 with st.sidebar:
     st.title("Finance Dashboard")
     st.caption("Jack's personal finance analytics")
-    page = st.radio(
-        "Navigate",
-        ["Net Worth", "Cash Flow & Pinch Points", "Projection vs Actuals", "Goals & Summary", "Manage Investments"],
-        label_visibility="collapsed",
-    )
+    ANALYTICS_PAGES = ["Net Worth", "Cash Flow & Pinch Points", "Projection vs Actuals", "Goals & Summary"]
+    MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
+
+    section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True)
+    if section == "Insights":
+        page = st.radio("Navigate", ANALYTICS_PAGES, label_visibility="collapsed")
+    else:
+        page = st.radio("Navigate", MANAGE_PAGES, label_visibility="collapsed")
     st.divider()
 
     # Quick stats
@@ -183,7 +186,7 @@ if page == "Net Worth":
 elif page == "Cash Flow & Pinch Points":
     st.header("Cash Flow & Pinch Points")
 
-    cf = d.CASH_FLOW.copy()
+    cf = d.get_cash_flow()
 
     show_history = st.toggle("Show historical months", value=False)
     if not show_history:
@@ -267,7 +270,7 @@ elif page == "Cash Flow & Pinch Points":
 
     # One-off expense timeline
     st.subheader("Upcoming One-off Expenses")
-    oo = d.ONE_OFF_EXPENSES.copy()
+    oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
     fig3 = px.bar(
@@ -284,13 +287,14 @@ elif page == "Cash Flow & Pinch Points":
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-    # Expense table
-    with st.expander("Full one-off expense list"):
+    # Expense table (read-only — manage entries via "Manage Data → Manage Expenses")
+    with st.expander("Full one-off expense list", expanded=False):
         display = oo.copy()
         display["date"] = display["date"].dt.strftime("%b %Y")
         display["amount"] = display["amount"].map(lambda x: f"£{x:,.0f}")
         display.columns = ["Reason", "Category", "Month", "Amount", "Note"]
         st.dataframe(display, use_container_width=True, hide_index=True)
+        st.caption('To add, edit, or delete one-off expenses, head to **Manage Data → Manage Expenses** in the sidebar.')
 
     # Monthly expense breakdown
     st.subheader("Recurring Monthly Expenses")
@@ -572,3 +576,92 @@ elif page == "Manage Investments":
                 d.delete_manual_snapshot(del_date)
                 st.success(f"Deleted manual snapshot for {del_date}.")
                 st.rerun()
+
+
+# ============================================================
+# PAGE 6 — MANAGE EXPENSES
+# ============================================================
+elif page == "Manage Expenses":
+    st.header("Manage Expenses")
+    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). "
+               "Changes flow straight into the Cash Flow & Pinch Points charts — your Excel file is never modified.")
+
+    oo = d.get_one_off_expenses()
+    ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
+
+    # --- Add a new one-off expense ---
+    st.subheader("Add a New One-off Expense")
+    with st.form("add_one_off_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            new_reason = st.text_input("Reason", placeholder="e.g. Friend's wedding")
+            new_category = st.selectbox("Category", options=ONE_OFF_CATEGORIES)
+            new_date = st.date_input("Month", value=pd.Timestamp.today())
+        with c2:
+            new_amount = st.number_input("Amount (£)", min_value=0.0, step=10.0, format="%.2f")
+            new_note = st.text_input("Note (optional)")
+        add_oo_submitted = st.form_submit_button("Add Expense", type="primary")
+        if add_oo_submitted:
+            if not new_reason.strip():
+                st.warning("Please enter a reason.")
+            else:
+                d.add_one_off_expense(new_reason.strip(), new_category,
+                                      new_date.replace(day=1), new_amount, new_note.strip() or None)
+                st.success(f'Added "{new_reason.strip()}" — £{new_amount:,.0f} in {new_date.strftime("%b %Y")}.')
+                st.cache_data.clear()
+                st.rerun()
+
+    st.divider()
+
+    # --- Edit or delete an existing expense ---
+    st.subheader("Edit or Delete an Existing Expense")
+    if oo.empty:
+        st.info("No one-off expenses yet — add one above.")
+    else:
+        options = {
+            idx: f'{row["reason"]} — £{row["amount"]:,.0f} ({row["date"].strftime("%b %Y")})'
+            for idx, row in oo.iterrows()
+        }
+        selected_id = st.selectbox(
+            "Select an expense", options=list(options.keys()),
+            format_func=lambda i: options[i], key="edit_oo_select",
+        )
+        sel = oo.loc[selected_id]
+
+        with st.form("edit_one_off_form"):
+            c1, c2 = st.columns(2)
+            with c1:
+                edit_reason = st.text_input("Reason", value=sel["reason"])
+                cat_idx = ONE_OFF_CATEGORIES.index(sel["category"]) if sel["category"] in ONE_OFF_CATEGORIES else 0
+                edit_category = st.selectbox("Category", options=ONE_OFF_CATEGORIES, index=cat_idx)
+                edit_date = st.date_input("Month", value=sel["date"].to_pydatetime())
+            with c2:
+                edit_amount = st.number_input("Amount (£)", min_value=0.0, step=10.0,
+                                               format="%.2f", value=float(sel["amount"]))
+                edit_note = st.text_input("Note (optional)", value=sel["note"] or "")
+
+            bcol1, bcol2 = st.columns(2)
+            save_clicked = bcol1.form_submit_button("Save Changes", type="primary")
+            delete_clicked = bcol2.form_submit_button("Delete Expense")
+
+            if save_clicked:
+                d.update_one_off_expense(selected_id, edit_reason.strip(), edit_category,
+                                         edit_date.replace(day=1), edit_amount, edit_note.strip() or None)
+                st.success("Expense updated.")
+                st.cache_data.clear()
+                st.rerun()
+            if delete_clicked:
+                d.delete_one_off_expense(selected_id)
+                st.success(f'Deleted "{sel["reason"]}".')
+                st.cache_data.clear()
+                st.rerun()
+
+    st.divider()
+
+    # --- Full list ---
+    st.subheader("All One-off Expenses")
+    display = oo.copy()
+    display["date"] = display["date"].dt.strftime("%b %Y")
+    display["amount"] = display["amount"].map(lambda x: f"£{x:,.0f}")
+    display.columns = ["Reason", "Category", "Month", "Amount", "Note"]
+    st.dataframe(display, use_container_width=True, hide_index=True)
