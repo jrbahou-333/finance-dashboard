@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 ~$*.xlsx
 .DS_Store
+
+# --- Personal financial data — never commit ---
+ECONOMIC EVALUATION.xlsx
+one_off_expenses.csv
+accounts_config.json
+manual_snapshots.csv
+world_cup_picker.html

@@ -10,14 +10,31 @@ import openpyxl
 
 EXCEL_PATH = "ECONOMIC EVALUATION.xlsx"
 
-# Manual additions (new monthly snapshots, custom accounts) live in these
-# small local files so the original Excel is never modified by the app.
+# Personal data files — gitignored, never committed.
+# sample_data/ versions are committed as runnable placeholders for anyone
+# cloning without real data.
 MANUAL_SNAPSHOTS_PATH = "manual_snapshots.csv"
-ACCOUNTS_CONFIG_PATH = "accounts_config.json"
+ACCOUNTS_CONFIG_PATH  = "accounts_config.json"
 ONE_OFF_EXPENSES_PATH = "one_off_expenses.csv"
+
+SAMPLE_MANUAL_SNAPSHOTS_PATH = "sample_data/manual_snapshots.csv"
+SAMPLE_ACCOUNTS_CONFIG_PATH  = "sample_data/accounts_config.json"
+SAMPLE_ONE_OFF_EXPENSES_PATH = "sample_data/one_off_expenses.csv"
+
+USING_REAL_EXCEL = os.path.exists(EXCEL_PATH)
+
+
+def _resolve(real_path, sample_path):
+    """Return real path if it exists, otherwise fall back to the sample."""
+    return real_path if os.path.exists(real_path) else sample_path
 
 
 def _load_workbook():
+    if not USING_REAL_EXCEL:
+        raise FileNotFoundError(
+            f"'{EXCEL_PATH}' not found. Add your own spreadsheet or run in demo mode "
+            "(the app uses sample_data/ files automatically when the Excel is absent)."
+        )
     return openpyxl.load_workbook(EXCEL_PATH, data_only=True)
 
 
@@ -133,11 +150,12 @@ def _seed_one_off_expenses():
 
 
 def load_one_off_expenses():
-    if os.path.exists(ONE_OFF_EXPENSES_PATH):
-        df = pd.read_csv(ONE_OFF_EXPENSES_PATH, parse_dates=["date"])
+    path = _resolve(ONE_OFF_EXPENSES_PATH, SAMPLE_ONE_OFF_EXPENSES_PATH)
+    if os.path.exists(path):
+        df = pd.read_csv(path, parse_dates=["date"])
         df["note"] = df["note"].where(df["note"].notna(), None)
         return df[_ONE_OFF_COLUMNS]
-    return _seed_one_off_expenses()
+    return _seed_one_off_expenses() if USING_REAL_EXCEL else pd.DataFrame(columns=_ONE_OFF_COLUMNS)
 
 
 def _save_one_off_expenses(df):
@@ -351,8 +369,9 @@ def _load_pension():
 # Stored in manual_snapshots.csv: date, account, amount
 # ---------------------------------------------------------------------------
 def load_manual_snapshots():
-    if os.path.exists(MANUAL_SNAPSHOTS_PATH):
-        df = pd.read_csv(MANUAL_SNAPSHOTS_PATH, parse_dates=["date"])
+    path = _resolve(MANUAL_SNAPSHOTS_PATH, SAMPLE_MANUAL_SNAPSHOTS_PATH)
+    if os.path.exists(path):
+        df = pd.read_csv(path, parse_dates=["date"])
         if not df.empty:
             return df
     return pd.DataFrame(columns=["date", "account", "amount"])
@@ -394,8 +413,9 @@ def _save_account_config(config):
 
 
 def load_account_config():
-    if os.path.exists(ACCOUNTS_CONFIG_PATH):
-        with open(ACCOUNTS_CONFIG_PATH) as f:
+    path = _resolve(ACCOUNTS_CONFIG_PATH, SAMPLE_ACCOUNTS_CONFIG_PATH)
+    if os.path.exists(path):
+        with open(path) as f:
             return json.load(f)
     return _seed_account_config()
 
