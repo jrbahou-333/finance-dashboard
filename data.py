@@ -212,6 +212,42 @@ def _load_cash_flow():
     return df
 
 
+def get_cash_flow():
+    """
+    Cash flow recomputed live: recurring monthly expenses + the *editable*
+    one-off expenses store, so adding/editing one-off expenses immediately
+    flows through to the Cash Flow & Pinch Points charts. Historical income
+    figures are kept from the Excel Calcs sheet (income varies month to
+    month); months without a recorded income fall back to the latest known
+    monthly income.
+    """
+    base = _load_cash_flow()
+    oo = load_one_off_expenses()
+    monthly_total = _load_monthly_expenses()["amount"].sum()
+
+    base_periods = base["date"].dt.to_period("M")
+    income_lookup = dict(zip(base_periods, base["income"]))
+    latest_income = base["income"].iloc[-1] if len(base) else _load_monthly_income()
+
+    oo_periods = oo["date"].dt.to_period("M") if len(oo) else pd.Series([], dtype="period[M]")
+    one_off_by_month = oo.groupby(oo_periods)["amount"].sum() if len(oo) else pd.Series(dtype=float)
+
+    months = sorted(set(base_periods) | set(oo_periods))
+    rows = []
+    for m in months:
+        rows.append({
+            "date": m.to_timestamp(),
+            "monthly_expenses": monthly_total,
+            "one_off_expenses": float(one_off_by_month.get(m, 0)),
+            "income": income_lookup.get(m, latest_income),
+        })
+    df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+    df["total_expenses"] = df["monthly_expenses"] + df["one_off_expenses"]
+    df["remaining"] = df["income"] - df["total_expenses"]
+    df["cumulative"] = df["remaining"].cumsum()
+    return df
+
+
 # ---------------------------------------------------------------------------
 # PROJECTIONS — projected vs actual net worth
 # Sheet: Projections
