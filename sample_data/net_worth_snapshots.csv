@@ -1,16 +1,31 @@
 date,account,amount
-2025-01-01,Cash (Current),1200
-2025-01-01,Cash (Savings),5000
-2025-01-01,Stocks & Shares ISA,8000
+2025-01-01,Chase,1200
+2025-01-01,Monzo (Savings),5000
+2025-01-01,S&S ISA,8000
 2025-01-01,Crypto,500
-2025-01-01,Pension,3000
-2025-02-01,Cash (Current),1400
-2025-02-01,Cash (Savings),5200
-2025-02-01,Stocks & Shares ISA,8300
+2025-01-01,Moneybox (LISA),3000
+2025-02-01,Chase,1400
+2025-02-01,Monzo (Savings),5200
+2025-02-01,S&S ISA,8300
 2025-02-01,Crypto,480
-2025-02-01,Pension,3100
-2025-03-01,Cash (Current),1300
-2025-03-01,Cash (Savings),5500
-2025-03-01,Stocks & Shares ISA,8700
+2025-02-01,Moneybox (LISA),3100
+2025-03-01,Chase,1300
+2025-03-01,Monzo (Savings),5500
+2025-03-01,S&S ISA,8700
 2025-03-01,Crypto,520
-2025-03-01,Pension,3200
+2025-03-01,Moneybox (LISA),3200
+2025-04-01,Chase,1500
+2025-04-01,Monzo (Savings),5800
+2025-04-01,S&S ISA,9100
+2025-04-01,Crypto,610
+2025-04-01,Moneybox (LISA),3350
+2025-05-01,Chase,1650
+2025-05-01,Monzo (Savings),6100
+2025-05-01,S&S ISA,9400
+2025-05-01,Crypto,580
+2025-05-01,Moneybox (LISA),3500
+2025-06-01,Chase,1800
+2025-06-01,Monzo (Savings),6400
+2025-06-01,S&S ISA,9800
+2025-06-01,Crypto,640
+2025-06-01,Moneybox (LISA),3650

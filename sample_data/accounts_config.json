@@ -1,10 +1,10 @@
 {
   "active": [
-    "Cash (Current)",
-    "Cash (Savings)",
-    "Stocks & Shares ISA",
+    "Chase",
+    "Monzo (Savings)",
+    "S&S ISA",
     "Crypto",
-    "Pension"
+    "Moneybox (LISA)"
   ],
   "removed": []
 }
