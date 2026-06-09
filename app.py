@@ -208,16 +208,6 @@ elif page == "Cash Flow & Pinch Points":
 
     st.divider()
 
-    # Build rich hover text for recurring bar (same breakdown every month)
-    rec_lines = "<br>".join(
-        f"  {row['category']}: £{row['amount']:,.0f}"
-        for _, row in d.MONTHLY_EXPENSES.iterrows()
-    )
-    rec_hover_template = (
-        f"<b>Recurring Expenses</b><br>{rec_lines}"
-        "<br><b>Total: £%{y:,.0f}</b><extra></extra>"
-    )
-
     # Build rich hover text for one-off bar (itemised per month)
     oo_all = d.get_one_off_expenses()
     oo_hover_texts = []
@@ -237,7 +227,7 @@ elif page == "Cash Flow & Pinch Points":
         x=cf["date"], y=cf["monthly_expenses"],
         name="Recurring Expenses",
         marker_color="#4C72B0",
-        hovertemplate=rec_hover_template,
+        hovertemplate="Recurring: £%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
         x=cf["date"], y=cf["one_off_expenses"],
