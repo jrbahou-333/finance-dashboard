@@ -221,18 +221,24 @@ elif page == "Cash Flow":
                 "<br>".join(f"  {r['reason']}: £{r['amount']:,.0f}" for _, r in items.iterrows())
             )
 
-    # Stacked bar: monthly + one-off spend, vs income line
+    # Filled-area expenses (recurring + one-off stacked), income as a line
     fig = go.Figure()
-    fig.add_trace(go.Bar(
+    fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["monthly_expenses"],
         name="Recurring Expenses",
-        marker_color="#4C72B0",
+        mode="lines",
+        stackgroup="expenses",
+        line=dict(width=0.5, color="#4C72B0"),
+        fillcolor="#4C72B0",
         hovertemplate="Recurring: £%{y:,.0f}<extra></extra>",
     ))
-    fig.add_trace(go.Bar(
+    fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["one_off_expenses"],
         name="One-off Expenses",
-        marker_color="#C44E52",
+        mode="lines",
+        stackgroup="expenses",
+        line=dict(width=0.5, color="#C44E52"),
+        fillcolor="#C44E52",
         customdata=oo_hover_texts,
         hovertemplate=(
             "<b>One-off Expenses</b><br>%{customdata}"
@@ -248,7 +254,6 @@ elif page == "Cash Flow":
         hovertemplate="Income: £%{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
-        barmode="stack",
         title="Monthly Spend vs Income",
         xaxis_title=None,
         yaxis_title="£",
@@ -259,38 +264,6 @@ elif page == "Cash Flow":
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
-
-    # Running cash balance — pinch points
-    fig2 = go.Figure()
-    fig2.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3)
-    colors = ["#51cf66" if v >= 0 else "#ff6b6b" for v in cf["remaining"]]
-    fig2.add_trace(go.Bar(
-        x=cf["date"], y=cf["remaining"],
-        name="Monthly Remaining",
-        marker_color=colors,
-        hovertemplate="Remaining: £%{y:,.0f}<extra></extra>",
-    ))
-    fig2.add_trace(go.Scatter(
-        x=cf["date"], y=cf["cumulative"],
-        name="Cumulative Balance",
-        mode="lines+markers",
-        line=dict(color="#F5A623", width=2),
-        marker=dict(size=6),
-        yaxis="y2",
-        hovertemplate="Cumulative: £%{y:,.0f}<extra></extra>",
-    ))
-    fig2.update_layout(
-        title="Pinch Points — Monthly Remaining & Running Balance",
-        xaxis_title=None,
-        yaxis=dict(title="Monthly Remaining (£)"),
-        yaxis2=dict(title="Cumulative (£)", overlaying="y", side="right"),
-        hovermode="x unified",
-        legend=dict(orientation="h", y=-0.15),
-        height=360,
-        template="plotly_dark",
-        margin=dict(t=40, b=10),
-    )
-    st.plotly_chart(fig2, use_container_width=True)
 
     # One-off expense timeline
     col_hdr, col_btn = st.columns([4, 1])
