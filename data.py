@@ -167,6 +167,52 @@ def _load_projections():
     return df
 
 
+# Anchor month — projection starts here and is held fixed; everything after
+# is recomputed dynamically from income, recurring expenses, and one-off
+# expenses for that month.
+PROJECTION_ANCHOR_DATE = pd.Timestamp("2025-07-01")
+
+
+def get_projections():
+    """
+    Projections from PROJECTION_ANCHOR_DATE onwards are recomputed live:
+    each month's projected net worth = previous month's projected net worth
+    + (income - recurring expenses - one-off expenses) for that month.
+    Months before the anchor keep their original projected values.
+
+    This means adding/editing one-off expenses immediately changes the
+    forward projection.
+    """
+    df = _load_projections().sort_values("date").reset_index(drop=True)
+
+    anchor_rows = df.index[df["date"] == PROJECTION_ANCHOR_DATE]
+    if len(anchor_rows) == 0:
+        return df
+
+    monthly_total = _load_monthly_expenses()["amount"].sum()
+
+    cf_path = _resolve(CASH_FLOW_PATH, SAMPLE_CASH_FLOW_PATH)
+    cf_base = pd.read_csv(cf_path, parse_dates=["date"])
+    cf_periods = cf_base["date"].dt.to_period("M")
+    income_lookup = dict(zip(cf_periods, cf_base["income"]))
+    latest_income = float(cf_base["income"].iloc[-1]) if len(cf_base) else _load_monthly_income()
+
+    oo = load_one_off_expenses()
+    oo_periods = oo["date"].dt.to_period("M") if len(oo) else pd.Series([], dtype="period[M]")
+    one_off_by_month = oo.groupby(oo_periods)["amount"].sum() if len(oo) else pd.Series(dtype=float)
+
+    cumulative = float(df.at[anchor_rows[0], "projected"])
+    for i in range(anchor_rows[0] + 1, len(df)):
+        period = df.at[i, "date"].to_period("M")
+        income = income_lookup.get(period, latest_income)
+        one_off = float(one_off_by_month.get(period, 0))
+        remaining = income - monthly_total - one_off
+        cumulative += remaining
+        df.at[i, "projected"] = cumulative
+
+    return df
+
+
 # ---------------------------------------------------------------------------
 # GOALS
 # ---------------------------------------------------------------------------
