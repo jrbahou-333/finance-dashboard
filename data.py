@@ -243,21 +243,76 @@ def load_manual_snapshots():
 
 
 def add_manual_snapshot(date, account_amounts: dict):
-    """Append a new monthly snapshot. account_amounts: {account_name: amount}"""
+    """
+    Append a new monthly snapshot. account_amounts: {account_name: amount}
+    Returns (ok, message). Rejected if a snapshot already exists for that
+    month, to avoid duplicate/conflicting monthly totals.
+    """
+    date = pd.Timestamp(date)
+    period = date.to_period("M")
+
+    existing = get_net_worth_snapshots()
+    if period in set(existing["date"].dt.to_period("M")):
+        return False, (
+            f"A snapshot already exists for {period.strftime('%B %Y')}. "
+            "Delete it first if you want to replace it."
+        )
+
     df = load_manual_snapshots()
     new_rows = pd.DataFrame([
-        {"date": pd.Timestamp(date), "account": acc, "amount": amt}
+        {"date": date, "account": acc, "amount": amt}
         for acc, amt in account_amounts.items()
     ])
     df = pd.concat([df, new_rows], ignore_index=True)
     df.to_csv(MANUAL_SNAPSHOTS_PATH, index=False)
 
+    _sync_projection_actual(date)
+
+    total = sum(account_amounts.values())
+    return True, f"Snapshot for {date.strftime('%d %b %Y')} saved — £{total:,.0f} total."
+
 
 def delete_manual_snapshot(date):
     """Remove a manually-added snapshot for a given date."""
+    date = pd.Timestamp(date)
     df = load_manual_snapshots()
-    df = df[pd.Timestamp(date) != pd.to_datetime(df["date"])]
+    df = df[date != pd.to_datetime(df["date"])]
     df.to_csv(MANUAL_SNAPSHOTS_PATH, index=False)
+
+    _sync_projection_actual(date)
+
+
+# ---------------------------------------------------------------------------
+# PROJECTIONS — sync "actual" net worth from snapshots
+# ---------------------------------------------------------------------------
+def _sync_projection_actual(snapshot_date):
+    """
+    A snapshot taken on `snapshot_date` represents the balance as of the end
+    of the *previous* calendar month. Recompute and write the 'actual' net
+    worth for that previous month into projections.csv. Adds a new row if
+    the month isn't in projections.csv yet; clears the value if no snapshot
+    exists for that date anymore.
+    """
+    snapshot_date = pd.Timestamp(snapshot_date)
+    target_period = snapshot_date.to_period("M") - 1
+
+    nws = get_net_worth_snapshots()
+    same_date_rows = nws[nws["date"] == snapshot_date]
+    total = float(same_date_rows["amount"].sum()) if len(same_date_rows) else float("nan")
+
+    path = _resolve(PROJECTIONS_PATH, SAMPLE_PROJECTIONS_PATH)
+    df = pd.read_csv(path, parse_dates=["date"])
+    df["actual"] = pd.to_numeric(df["actual"], errors="coerce")
+
+    match = df.index[df["date"].dt.to_period("M") == target_period]
+    if len(match):
+        df.loc[match[0], "actual"] = total
+    elif not pd.isna(total):
+        new_row = pd.DataFrame([{"date": target_period.to_timestamp(), "projected": float("nan"), "actual": total}])
+        df = pd.concat([df, new_row], ignore_index=True)
+
+    df = df.sort_values("date").reset_index(drop=True)
+    df.to_csv(PROJECTIONS_PATH, index=False)
 
 
 # ---------------------------------------------------------------------------

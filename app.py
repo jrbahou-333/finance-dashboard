@@ -497,10 +497,11 @@ elif page == "Manage Investments":
 
         submitted = st.form_submit_button("Save Snapshot", type="primary")
         if submitted:
-            d.add_manual_snapshot(snapshot_date, amounts)
-            st.success(f"Snapshot for {snapshot_date.strftime('%d %b %Y')} saved — £{sum(amounts.values()):,.0f} total.")
-            st.cache_data.clear()
-            st.rerun()
+            ok, msg = d.add_manual_snapshot(snapshot_date, amounts)
+            (st.success if ok else st.warning)(msg)
+            if ok:
+                st.cache_data.clear()
+                st.rerun()
 
     st.divider()
 
