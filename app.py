@@ -51,7 +51,7 @@ def _go_to(page_value):
 with st.sidebar:
     st.title("Finance Dashboard")
     st.caption("Jack's personal finance analytics")
-    ANALYTICS_PAGES = ["Net Worth", "Cash Flow & Pinch Points", "Projection vs Actuals", "Goals & Summary"]
+    ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection", "Goals & Pension"]
     MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
 
     section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
@@ -188,10 +188,10 @@ if page == "Net Worth":
 
 
 # ============================================================
-# PAGE 2 — CASH FLOW & PINCH POINTS
+# PAGE 2 — CASH FLOW
 # ============================================================
-elif page == "Cash Flow & Pinch Points":
-    st.header("Cash Flow & Pinch Points")
+elif page == "Cash Flow":
+    st.header("Cash Flow")
 
     cf = d.get_cash_flow()
 
@@ -344,12 +344,12 @@ elif page == "Cash Flow & Pinch Points":
 
 
 # ============================================================
-# PAGE 3 — PROJECTION VS ACTUALS
+# PAGE 3 — PROJECTION
 # ============================================================
-elif page == "Projection vs Actuals":
-    st.header("Projection vs Actuals")
+elif page == "Projection":
+    st.header("Projection")
 
-    proj = d.PROJECTIONS.copy()
+    proj = d.get_projections()
     actual_known = proj.dropna(subset=["actual"])
     latest_actual = actual_known.iloc[-1] if len(actual_known) else None
 
@@ -405,7 +405,7 @@ elif page == "Projection vs Actuals":
         )
 
     fig.update_layout(
-        title="Net Worth: Projection vs Actuals",
+        title="Net Worth: Projected vs Actual",
         xaxis_title=None,
         yaxis_title="Net Worth (£)",
         hovermode="x unified",
@@ -446,10 +446,10 @@ elif page == "Projection vs Actuals":
 
 
 # ============================================================
-# PAGE 4 — GOALS & SUMMARY
+# PAGE 4 — GOALS & PENSION
 # ============================================================
-elif page == "Goals & Summary":
-    st.header("Goals & Summary")
+elif page == "Goals & Pension":
+    st.header("Goals & Pension")
 
     # Goals progress bars
     st.subheader("Savings Goals")
@@ -610,7 +610,7 @@ elif page == "Manage Investments":
 elif page == "Manage Expenses":
     st.header("Manage Expenses")
     st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). "
-               "Changes flow straight into the Cash Flow & Pinch Points charts — your Excel file is never modified.")
+               "Changes flow straight into the Cash Flow charts — your Excel file is never modified.")
 
     oo = d.get_one_off_expenses()
     ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
