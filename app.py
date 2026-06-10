@@ -492,28 +492,6 @@ elif page == "Goals & Pension":
         m3.metric("Balance", f"£{cu['balance']:,.0f}")
         st.caption(f"As of {cu['date']}")
 
-    st.divider()
-
-    # Net worth summary donut
-    st.subheader("Current Allocation Snapshot")
-    nws = d.get_net_worth_snapshots()
-    latest_date = nws["date"].max()
-    latest = nws[nws["date"] == latest_date]
-    pos = latest[latest["amount"] > 0]
-
-    fig = px.pie(
-        pos, values="amount", names="account",
-        color="account", color_discrete_map=ACCOUNT_COLORS,
-        hole=0.5,
-        title=f"Total Net Worth: £{pos['amount'].sum():,.0f}",
-    )
-    fig.update_traces(textposition="outside", textinfo="label+value")
-    fig.update_layout(
-        showlegend=False, template="plotly_dark", height=380,
-        margin=dict(t=40, b=20, l=80, r=80),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
 
 # ============================================================
 # PAGE 5 — MANAGE INVESTMENTS
