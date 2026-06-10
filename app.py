@@ -561,8 +561,7 @@ elif page == "Manage Investments":
 # ============================================================
 elif page == "Manage Expenses":
     st.header("Manage Expenses")
-    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). "
-               "Changes flow straight into the Cash Flow charts — your Excel file is never modified.")
+    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
 
     oo = d.get_one_off_expenses()
     ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
