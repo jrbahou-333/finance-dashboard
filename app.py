@@ -51,7 +51,7 @@ def _go_to(page_value):
 with st.sidebar:
     st.title("Finance Dashboard")
     st.caption("Jack's personal finance analytics")
-    ANALYTICS_PAGES = ["Net Worth", "Cash Flow & Pinch Points", "Projection vs Actuals", "Goals & Summary"]
+    ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection", "Goals & Pension"]
     MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
 
     section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
@@ -188,10 +188,10 @@ if page == "Net Worth":
 
 
 # ============================================================
-# PAGE 2 — CASH FLOW & PINCH POINTS
+# PAGE 2 — CASH FLOW
 # ============================================================
-elif page == "Cash Flow & Pinch Points":
-    st.header("Cash Flow & Pinch Points")
+elif page == "Cash Flow":
+    st.header("Cash Flow")
 
     cf = d.get_cash_flow()
 
@@ -221,18 +221,24 @@ elif page == "Cash Flow & Pinch Points":
                 "<br>".join(f"  {r['reason']}: £{r['amount']:,.0f}" for _, r in items.iterrows())
             )
 
-    # Stacked bar: monthly + one-off spend, vs income line
+    # Filled-area expenses (recurring + one-off stacked), income as a line
     fig = go.Figure()
-    fig.add_trace(go.Bar(
+    fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["monthly_expenses"],
         name="Recurring Expenses",
-        marker_color="#4C72B0",
+        mode="lines",
+        stackgroup="expenses",
+        line=dict(width=0.5, color="#4C72B0"),
+        fillcolor="#4C72B0",
         hovertemplate="Recurring: £%{y:,.0f}<extra></extra>",
     ))
-    fig.add_trace(go.Bar(
+    fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["one_off_expenses"],
         name="One-off Expenses",
-        marker_color="#C44E52",
+        mode="lines",
+        stackgroup="expenses",
+        line=dict(width=0.5, color="#C44E52"),
+        fillcolor="#C44E52",
         customdata=oo_hover_texts,
         hovertemplate=(
             "<b>One-off Expenses</b><br>%{customdata}"
@@ -248,7 +254,6 @@ elif page == "Cash Flow & Pinch Points":
         hovertemplate="Income: £%{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
-        barmode="stack",
         title="Monthly Spend vs Income",
         xaxis_title=None,
         yaxis_title="£",
@@ -259,38 +264,6 @@ elif page == "Cash Flow & Pinch Points":
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
-
-    # Running cash balance — pinch points
-    fig2 = go.Figure()
-    fig2.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3)
-    colors = ["#51cf66" if v >= 0 else "#ff6b6b" for v in cf["remaining"]]
-    fig2.add_trace(go.Bar(
-        x=cf["date"], y=cf["remaining"],
-        name="Monthly Remaining",
-        marker_color=colors,
-        hovertemplate="Remaining: £%{y:,.0f}<extra></extra>",
-    ))
-    fig2.add_trace(go.Scatter(
-        x=cf["date"], y=cf["cumulative"],
-        name="Cumulative Balance",
-        mode="lines+markers",
-        line=dict(color="#F5A623", width=2),
-        marker=dict(size=6),
-        yaxis="y2",
-        hovertemplate="Cumulative: £%{y:,.0f}<extra></extra>",
-    ))
-    fig2.update_layout(
-        title="Pinch Points — Monthly Remaining & Running Balance",
-        xaxis_title=None,
-        yaxis=dict(title="Monthly Remaining (£)"),
-        yaxis2=dict(title="Cumulative (£)", overlaying="y", side="right"),
-        hovermode="x unified",
-        legend=dict(orientation="h", y=-0.15),
-        height=360,
-        template="plotly_dark",
-        margin=dict(t=40, b=10),
-    )
-    st.plotly_chart(fig2, use_container_width=True)
 
     # One-off expense timeline
     col_hdr, col_btn = st.columns([4, 1])
@@ -344,12 +317,12 @@ elif page == "Cash Flow & Pinch Points":
 
 
 # ============================================================
-# PAGE 3 — PROJECTION VS ACTUALS
+# PAGE 3 — PROJECTION
 # ============================================================
-elif page == "Projection vs Actuals":
-    st.header("Projection vs Actuals")
+elif page == "Projection":
+    st.header("Projection")
 
-    proj = d.PROJECTIONS.copy()
+    proj = d.get_projections()
     actual_known = proj.dropna(subset=["actual"])
     latest_actual = actual_known.iloc[-1] if len(actual_known) else None
 
@@ -405,7 +378,7 @@ elif page == "Projection vs Actuals":
         )
 
     fig.update_layout(
-        title="Net Worth: Projection vs Actuals",
+        title="Net Worth: Projected vs Actual",
         xaxis_title=None,
         yaxis_title="Net Worth (£)",
         hovermode="x unified",
@@ -446,10 +419,10 @@ elif page == "Projection vs Actuals":
 
 
 # ============================================================
-# PAGE 4 — GOALS & SUMMARY
+# PAGE 4 — GOALS & PENSION
 # ============================================================
-elif page == "Goals & Summary":
-    st.header("Goals & Summary")
+elif page == "Goals & Pension":
+    st.header("Goals & Pension")
 
     # Goals progress bars
     st.subheader("Savings Goals")
@@ -492,28 +465,6 @@ elif page == "Goals & Summary":
         m3.metric("Balance", f"£{cu['balance']:,.0f}")
         st.caption(f"As of {cu['date']}")
 
-    st.divider()
-
-    # Net worth summary donut
-    st.subheader("Current Allocation Snapshot")
-    nws = d.get_net_worth_snapshots()
-    latest_date = nws["date"].max()
-    latest = nws[nws["date"] == latest_date]
-    pos = latest[latest["amount"] > 0]
-
-    fig = px.pie(
-        pos, values="amount", names="account",
-        color="account", color_discrete_map=ACCOUNT_COLORS,
-        hole=0.5,
-        title=f"Total Net Worth: £{pos['amount'].sum():,.0f}",
-    )
-    fig.update_traces(textposition="outside", textinfo="label+value")
-    fig.update_layout(
-        showlegend=False, template="plotly_dark", height=380,
-        margin=dict(t=40, b=20, l=80, r=80),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
 
 # ============================================================
 # PAGE 5 — MANAGE INVESTMENTS
@@ -546,10 +497,11 @@ elif page == "Manage Investments":
 
         submitted = st.form_submit_button("Save Snapshot", type="primary")
         if submitted:
-            d.add_manual_snapshot(snapshot_date, amounts)
-            st.success(f"Snapshot for {snapshot_date.strftime('%d %b %Y')} saved — £{sum(amounts.values()):,.0f} total.")
-            st.cache_data.clear()
-            st.rerun()
+            ok, msg = d.add_manual_snapshot(snapshot_date, amounts)
+            (st.success if ok else st.warning)(msg)
+            if ok:
+                st.cache_data.clear()
+                st.rerun()
 
     st.divider()
 
@@ -609,8 +561,7 @@ elif page == "Manage Investments":
 # ============================================================
 elif page == "Manage Expenses":
     st.header("Manage Expenses")
-    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). "
-               "Changes flow straight into the Cash Flow & Pinch Points charts — your Excel file is never modified.")
+    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
 
     oo = d.get_one_off_expenses()
     ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
