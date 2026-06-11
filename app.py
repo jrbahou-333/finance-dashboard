@@ -20,24 +20,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-ACCOUNT_COLORS = {
-    "Moneybox (LISA)": "#4C72B0",
-    "S&S ISA":         "#55A868",
-    "Crypto":          "#F5A623",
-    "Chase":           "#8172B2",
-    "Monzo (Savings)": "#64B5CD",
-    "Monzo (Spend)":   "#CCB974",
-    "Debit (Revolut)": "#C44E52",
-    "Credit":          "#DD8452",
-}
+PALETTE = [
+    "#4C72B0", "#55A868", "#C44E52", "#8172B2", "#F5A623",
+    "#64B5CD", "#CCB974", "#DD8452", "#937860", "#DA8BC3",
+]
 
-CATEGORY_COLORS = {
-    "Holiday/Fun": "#4C72B0",
-    "Weddings":    "#C44E52",
-    "Gifts":       "#55A868",
-    "Car":         "#F5A623",
-    "House":       "#8172B2",
-}
+
+def color_map(values):
+    """Assign a stable colour from the shared palette to each unique value."""
+    return {v: PALETTE[i % len(PALETTE)] for i, v in enumerate(sorted(set(values)))}
 
 
 def _go_to(page_value):
@@ -95,8 +86,9 @@ if page == "Net Worth":
     # Stacked area chart
     fig = go.Figure()
     accounts = [c for c in pivot.columns if c != "Total"]
+    account_colors = color_map(accounts)
     for acc in accounts:
-        color = ACCOUNT_COLORS.get(acc, "#888")
+        color = account_colors[acc]
         fig.add_trace(go.Scatter(
             x=pivot.index, y=pivot[acc],
             name=acc,
@@ -146,7 +138,7 @@ if page == "Net Worth":
         pos = latest[latest["amount"] > 0]
         fig2 = px.pie(
             pos, values="amount", names="account",
-            color="account", color_discrete_map=ACCOUNT_COLORS,
+            color="account", color_discrete_map=account_colors,
             hole=0.45,
         )
         fig2.update_traces(textposition="outside", textinfo="label+percent")
@@ -182,7 +174,7 @@ if page == "Net Worth":
         .style
         .format({"Invested (£)": "£{:,.0f}", "Current (£)": "£{:,.0f}",
                  "P&L (£)": "£{:,.0f}", "P&L (%)": "{:.1f}%"})
-        .applymap(color_pl, subset=["P&L (£)", "P&L (%)"])
+        .map(color_pl, subset=["P&L (£)", "P&L (%)"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -274,10 +266,11 @@ elif page == "Cash Flow":
 
     fig3 = px.bar(
         oo_monthly, x="date", y="amount", color="category",
-        color_discrete_map=CATEGORY_COLORS,
+        color_discrete_map=color_map(oo_monthly["category"]),
         labels={"amount": "£", "date": "", "category": "Category"},
         title="One-off Expenses by Month",
     )
+    fig3.update_traces(width=1000 * 60 * 60 * 24 * 25)  # ~25 days, so bars don't bleed into neighbouring months
     fig3.update_layout(
         template="plotly_dark", height=300,
         legend=dict(orientation="h", y=-0.2),
@@ -413,7 +406,7 @@ elif page == "Projection":
             "Projected": "£{:,.0f}", "Actual": "£{:,.0f}",
             "Variance (£)": "£{:,.0f}", "Variance (%)": "{:.1f}%",
         })
-        .applymap(color_var, subset=["Variance (£)", "Variance (%)"])
+        .map(color_var, subset=["Variance (£)", "Variance (%)"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -516,7 +509,7 @@ elif page == "Manage Expenses":
     st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
 
     oo = d.get_one_off_expenses()
-    ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
+    ONE_OFF_CATEGORIES = sorted(set(d.MONTHLY_EXPENSES["category"]) | set(oo["category"].dropna().unique()))
 
     # --- Add a new one-off expense ---
     st.subheader("Add a New One-off Expense")
