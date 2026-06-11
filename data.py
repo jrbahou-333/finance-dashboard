@@ -17,6 +17,7 @@ MANUAL_SNAPSHOTS_PATH    = "manual_snapshots.csv"
 ACCOUNTS_CONFIG_PATH     = "accounts_config.json"
 ONE_OFF_EXPENSES_PATH    = "one_off_expenses.csv"
 INVESTED_AMOUNTS_PATH    = "invested_amounts.csv"
+SETTINGS_PATH            = "settings.json"
 
 SAMPLE_NET_WORTH_SNAPSHOTS_PATH = "sample_data/net_worth_snapshots.csv"
 SAMPLE_CASH_FLOW_PATH           = "sample_data/cash_flow.csv"
@@ -26,6 +27,9 @@ SAMPLE_MANUAL_SNAPSHOTS_PATH    = "sample_data/manual_snapshots.csv"
 SAMPLE_ACCOUNTS_CONFIG_PATH     = "sample_data/accounts_config.json"
 SAMPLE_ONE_OFF_EXPENSES_PATH    = "sample_data/one_off_expenses.csv"
 SAMPLE_INVESTED_AMOUNTS_PATH    = "sample_data/invested_amounts.csv"
+SAMPLE_SETTINGS_PATH            = "sample_data/settings.json"
+
+DEFAULT_SETTINGS = {"palette": "Pastel"}
 
 
 def _resolve(real_path, sample_path):
@@ -387,6 +391,32 @@ def add_contributions(contributions: dict):
     if existing:
         df = pd.DataFrame(existing.items(), columns=_INVESTED_COLUMNS)
         _save_invested_amounts(df)
+
+
+# ---------------------------------------------------------------------------
+# SETTINGS — user preferences (e.g. chart colour palette)
+# ---------------------------------------------------------------------------
+def load_settings():
+    path = _resolve(SETTINGS_PATH, SAMPLE_SETTINGS_PATH)
+    if os.path.exists(path):
+        with open(path) as f:
+            return {**DEFAULT_SETTINGS, **json.load(f)}
+    return dict(DEFAULT_SETTINGS)
+
+
+def save_settings(settings):
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(settings, f, indent=2)
+
+
+def get_palette_name():
+    return load_settings()["palette"]
+
+
+def set_palette_name(name):
+    settings = load_settings()
+    settings["palette"] = name
+    save_settings(settings)
 
 
 # ---------------------------------------------------------------------------

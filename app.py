@@ -20,10 +20,31 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-PALETTE = [
-    "#4C72B0", "#55A868", "#C44E52", "#8172B2", "#F5A623",
-    "#64B5CD", "#CCB974", "#DD8452", "#937860", "#DA8BC3",
-]
+PALETTES = {
+    "Seaborn": [
+        "#4C72B0", "#55A868", "#C44E52", "#8172B2", "#F5A623",
+        "#64B5CD", "#CCB974", "#DD8452", "#937860", "#DA8BC3",
+    ],
+    "Cool": [
+        "#2C5F8A", "#4A90A4", "#7FB3B0", "#A8C5D6", "#5B7FA6",
+        "#3D8B7D", "#8BA888", "#6C7B8B", "#B8A88A", "#7A6F9B",
+    ],
+    "Vibrant": [
+        "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+        "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+    ],
+    "Earthy": [
+        "#3F6F4F", "#7A8B4A", "#C9A227", "#A65E2E", "#6E5849",
+        "#94B49F", "#D4B483", "#5C8374", "#B0735C", "#8C9B6E",
+    ],
+    "Pastel": [
+        "#A8DADC", "#F4A261", "#E9C46A", "#CDB4DB", "#B5C99A",
+        "#FFB4A2", "#9DB4C0", "#E5989B", "#C9CBA3", "#A3C4BC",
+    ],
+}
+
+PALETTE_NAME = d.get_palette_name()
+PALETTE = PALETTES.get(PALETTE_NAME, PALETTES["Pastel"])
 
 
 def color_map(values):
@@ -70,6 +91,18 @@ with st.sidebar:
     st.caption(f"As of {latest_date.strftime('%d %b %Y')}")
     st.metric("Monthly Income", f"£{d.MONTHLY_INCOME:,}")
     st.metric("Monthly Expenses", f"£{d.MONTHLY_EXPENSES['amount'].sum():,}")
+
+    st.divider()
+
+    # Chart colour palette
+    palette_options = list(PALETTES.keys())
+    selected_palette = st.selectbox(
+        "Chart colour palette", options=palette_options,
+        index=palette_options.index(PALETTE_NAME) if PALETTE_NAME in palette_options else 0,
+    )
+    if selected_palette != PALETTE_NAME:
+        d.set_palette_name(selected_palette)
+        st.rerun()
 
 
 # ============================================================
