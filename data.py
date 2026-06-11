@@ -13,8 +13,6 @@ NET_WORTH_SNAPSHOTS_PATH = "net_worth_snapshots.csv"
 CASH_FLOW_PATH           = "cash_flow.csv"
 MONTHLY_EXPENSES_PATH    = "monthly_expenses.csv"
 PROJECTIONS_PATH         = "projections.csv"
-GOALS_PATH               = "goals.csv"
-PENSION_PATH             = "pension.json"
 MANUAL_SNAPSHOTS_PATH    = "manual_snapshots.csv"
 ACCOUNTS_CONFIG_PATH     = "accounts_config.json"
 ONE_OFF_EXPENSES_PATH    = "one_off_expenses.csv"
@@ -23,8 +21,6 @@ SAMPLE_NET_WORTH_SNAPSHOTS_PATH = "sample_data/net_worth_snapshots.csv"
 SAMPLE_CASH_FLOW_PATH           = "sample_data/cash_flow.csv"
 SAMPLE_MONTHLY_EXPENSES_PATH    = "sample_data/monthly_expenses.csv"
 SAMPLE_PROJECTIONS_PATH         = "sample_data/projections.csv"
-SAMPLE_GOALS_PATH               = "sample_data/goals.csv"
-SAMPLE_PENSION_PATH             = "sample_data/pension.json"
 SAMPLE_MANUAL_SNAPSHOTS_PATH    = "sample_data/manual_snapshots.csv"
 SAMPLE_ACCOUNTS_CONFIG_PATH     = "sample_data/accounts_config.json"
 SAMPLE_ONE_OFF_EXPENSES_PATH    = "sample_data/one_off_expenses.csv"
@@ -214,23 +210,6 @@ def get_projections():
 
 
 # ---------------------------------------------------------------------------
-# GOALS
-# ---------------------------------------------------------------------------
-def _load_goals():
-    path = _resolve(GOALS_PATH, SAMPLE_GOALS_PATH)
-    return pd.read_csv(path)
-
-
-# ---------------------------------------------------------------------------
-# PENSION
-# ---------------------------------------------------------------------------
-def _load_pension():
-    path = _resolve(PENSION_PATH, SAMPLE_PENSION_PATH)
-    with open(path) as f:
-        return json.load(f)
-
-
-# ---------------------------------------------------------------------------
 # MANUAL SNAPSHOTS — monthly investment values added via the app
 # ---------------------------------------------------------------------------
 def load_manual_snapshots():
@@ -387,5 +366,3 @@ MONTHLY_INCOME      = _load_monthly_income()
 MONTHLY_EXPENSES    = _load_monthly_expenses()
 ONE_OFF_EXPENSES    = get_one_off_expenses()
 PROJECTIONS         = _load_projections()
-GOALS               = _load_goals()
-PENSION             = _load_pension()
