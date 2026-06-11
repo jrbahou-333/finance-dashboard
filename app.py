@@ -46,6 +46,9 @@ PALETTES = {
 PALETTE_NAME = d.get_palette_name()
 PALETTE = PALETTES.get(PALETTE_NAME, PALETTES["Pastel"])
 
+THEME = d.get_theme()
+PLOTLY_TEMPLATE = "plotly_dark" if THEME == "Dark" else "plotly_white"
+
 
 def color_map(values):
     """Assign a stable colour from the shared palette to each unique value."""
@@ -104,6 +107,16 @@ with st.sidebar:
         d.set_palette_name(selected_palette)
         st.rerun()
 
+    # Chart theme
+    theme_options = ["Dark", "Light"]
+    selected_theme = st.selectbox(
+        "Chart theme", options=theme_options,
+        index=theme_options.index(THEME) if THEME in theme_options else 0,
+    )
+    if selected_theme != THEME:
+        d.set_theme(selected_theme)
+        st.rerun()
+
 
 # ============================================================
 # PAGE 1 — NET WORTH
@@ -135,7 +148,7 @@ if page == "Net Worth":
         x=pivot.index, y=pivot["Total"],
         name="Total",
         mode="lines+markers",
-        line=dict(color="white", width=2, dash="dot"),
+        line=dict(color="white" if THEME == "Dark" else "black", width=2, dash="dot"),
         marker=dict(size=6),
         hovertemplate="<b>Total</b><br>£%{y:,.0f}<extra></extra>",
     ))
@@ -146,7 +159,7 @@ if page == "Net Worth":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.15),
         height=420,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -176,7 +189,7 @@ if page == "Net Worth":
         )
         fig2.update_traces(textposition="outside", textinfo="label+percent")
         fig2.update_layout(
-            showlegend=False, height=320, template="plotly_dark",
+            showlegend=False, height=320, template=PLOTLY_TEMPLATE,
             margin=dict(t=10, b=10, l=10, r=10),
         )
         st.plotly_chart(fig2, use_container_width=True)
@@ -280,7 +293,7 @@ elif page == "Cash Flow":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.15),
         height=380,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -300,7 +313,7 @@ elif page == "Cash Flow":
     )
     fig3.update_traces(width=1000 * 60 * 60 * 24 * 25)  # ~25 days, so bars don't bleed into neighbouring months
     fig3.update_layout(
-        template="plotly_dark", height=300,
+        template=PLOTLY_TEMPLATE, height=300,
         legend=dict(orientation="h", y=-0.2),
         margin=dict(t=40, b=10),
         barmode="stack",
@@ -324,7 +337,7 @@ elif page == "Cash Flow":
     )
     fig4.update_traces(textposition="outside", textinfo="label+percent")
     fig4.update_layout(
-        showlegend=False, template="plotly_dark", height=340,
+        showlegend=False, template=PLOTLY_TEMPLATE, height=340,
         margin=dict(t=40, b=10, l=10, r=10),
     )
     col_a, col_b = st.columns([1, 1])
@@ -405,7 +418,7 @@ elif page == "Projection":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.12),
         height=430,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
