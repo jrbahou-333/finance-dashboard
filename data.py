@@ -29,7 +29,7 @@ SAMPLE_ONE_OFF_EXPENSES_PATH    = "sample_data/one_off_expenses.csv"
 SAMPLE_INVESTED_AMOUNTS_PATH    = "sample_data/invested_amounts.csv"
 SAMPLE_SETTINGS_PATH            = "sample_data/settings.json"
 
-DEFAULT_SETTINGS = {"palette": "Pastel", "theme": "Dark"}
+DEFAULT_SETTINGS = {"palette": "Pastel"}
 
 
 def _resolve(real_path, sample_path):
@@ -416,16 +416,6 @@ def get_palette_name():
 def set_palette_name(name):
     settings = load_settings()
     settings["palette"] = name
-    save_settings(settings)
-
-
-def get_theme():
-    return load_settings()["theme"]
-
-
-def set_theme(theme):
-    settings = load_settings()
-    settings["theme"] = theme
     save_settings(settings)
 
 

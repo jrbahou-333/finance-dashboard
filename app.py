@@ -46,8 +46,7 @@ PALETTES = {
 PALETTE_NAME = d.get_palette_name()
 PALETTE = PALETTES.get(PALETTE_NAME, PALETTES["Pastel"])
 
-THEME = d.get_theme()
-PLOTLY_TEMPLATE = "plotly_dark" if THEME == "Dark" else "plotly_white"
+PLOTLY_TEMPLATE = "plotly_dark"
 
 
 def color_map(values):
@@ -107,16 +106,6 @@ with st.sidebar:
         d.set_palette_name(selected_palette)
         st.rerun()
 
-    # Chart theme
-    theme_options = ["Dark", "Light"]
-    selected_theme = st.selectbox(
-        "Chart theme", options=theme_options,
-        index=theme_options.index(THEME) if THEME in theme_options else 0,
-    )
-    if selected_theme != THEME:
-        d.set_theme(selected_theme)
-        st.rerun()
-
 
 # ============================================================
 # PAGE 1 — NET WORTH
@@ -148,7 +137,7 @@ if page == "Net Worth":
         x=pivot.index, y=pivot["Total"],
         name="Total",
         mode="lines+markers",
-        line=dict(color="white" if THEME == "Dark" else "black", width=2, dash="dot"),
+        line=dict(color="white", width=2, dash="dot"),
         marker=dict(size=6),
         hovertemplate="<b>Total</b><br>£%{y:,.0f}<extra></extra>",
     ))
@@ -255,14 +244,15 @@ elif page == "Cash Flow":
             )
 
     # Filled-area expenses (recurring + one-off stacked), income as a line
+    cf_colors = color_map(["Recurring Expenses", "One-off Expenses", "Income"])
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["monthly_expenses"],
         name="Recurring Expenses",
         mode="lines",
         stackgroup="expenses",
-        line=dict(width=0.5, color="#4C72B0"),
-        fillcolor="#4C72B0",
+        line=dict(width=0.5, color=cf_colors["Recurring Expenses"]),
+        fillcolor=cf_colors["Recurring Expenses"],
         hovertemplate="Recurring: £%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
@@ -270,8 +260,8 @@ elif page == "Cash Flow":
         name="One-off Expenses",
         mode="lines",
         stackgroup="expenses",
-        line=dict(width=0.5, color="#C44E52"),
-        fillcolor="#C44E52",
+        line=dict(width=0.5, color=cf_colors["One-off Expenses"]),
+        fillcolor=cf_colors["One-off Expenses"],
         customdata=oo_hover_texts,
         hovertemplate=(
             "<b>One-off Expenses</b><br>%{customdata}"
@@ -282,7 +272,7 @@ elif page == "Cash Flow":
         x=cf["date"], y=cf["income"],
         name="Income",
         mode="lines+markers",
-        line=dict(color="#51cf66", width=2),
+        line=dict(color=cf_colors["Income"], width=2),
         marker=dict(size=6),
         hovertemplate="Income: £%{y:,.0f}<extra></extra>",
     ))
@@ -305,9 +295,11 @@ elif page == "Cash Flow":
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
+    category_colors = color_map(set(oo_monthly["category"]) | set(d.MONTHLY_EXPENSES["category"]))
+
     fig3 = px.bar(
         oo_monthly, x="date", y="amount", color="category",
-        color_discrete_map=color_map(oo_monthly["category"]),
+        color_discrete_map=category_colors,
         labels={"amount": "£", "date": "", "category": "Category"},
         title="One-off Expenses by Month",
     )
@@ -333,6 +325,7 @@ elif page == "Cash Flow":
     st.subheader("Recurring Monthly Expenses")
     fig4 = px.pie(
         d.MONTHLY_EXPENSES, values="amount", names="category",
+        color="category", color_discrete_map=category_colors,
         hole=0.4, title=f"Monthly Spend Breakdown — Total £{d.MONTHLY_EXPENSES['amount'].sum():,}",
     )
     fig4.update_traces(textposition="outside", textinfo="label+percent")
