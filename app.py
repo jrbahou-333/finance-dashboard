@@ -51,7 +51,7 @@ def _go_to(page_value):
 with st.sidebar:
     st.title("Finance Dashboard")
     st.caption("Jack's personal finance analytics")
-    ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection", "Goals & Pension"]
+    ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection"]
     MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
 
     section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
@@ -419,55 +419,7 @@ elif page == "Projection":
 
 
 # ============================================================
-# PAGE 4 — GOALS & PENSION
-# ============================================================
-elif page == "Goals & Pension":
-    st.header("Goals & Pension")
-
-    # Goals progress bars
-    st.subheader("Savings Goals")
-    goals = d.GOALS.copy()
-    total_goal_monthly = goals["monthly_saving"].sum()
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total Monthly Goal Saving Required", f"£{total_goal_monthly:,.0f}")
-    col2.metric("Monthly Surplus Available", f"£{d.MONTHLY_INCOME - d.MONTHLY_EXPENSES['amount'].sum():,}")
-
-    for _, row in goals.iterrows():
-        label = f"**{row['goal']}** — £{row['target']:,.0f} target over {row['months']} months (£{row['monthly_saving']:,.0f}/mo)"
-        if row["comment"]:
-            label += f"  \n*{row['comment']}*"
-        st.markdown(label)
-        progress = min(1.0, 0.3)  # placeholder — replace with actual saved / target
-        st.progress(progress)
-
-    st.divider()
-
-    # Pension summary
-    st.subheader("Pension")
-    col1, col2 = st.columns(2)
-    with col1:
-        lg = d.PENSION["legal_general"]
-        st.markdown(f"**{lg['name']}**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Invested", f"£{lg['invested']:,.0f}")
-        m2.metric("Balance", f"£{lg['balance']:,.0f}")
-        gain_pct = (lg["balance"] - lg["invested"]) / lg["invested"] * 100
-        m3.metric("Gain", f"{gain_pct:.1f}%")
-        st.caption(f"As of {lg['date']}")
-
-    with col2:
-        cu = d.PENSION["cushon"]
-        st.markdown(f"**{cu['name']}**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Me / Month", f"£{cu['monthly_me']}")
-        m2.metric("Employer / Month", f"£{cu['monthly_employer']}")
-        m3.metric("Balance", f"£{cu['balance']:,.0f}")
-        st.caption(f"As of {cu['date']}")
-
-
-# ============================================================
-# PAGE 5 — MANAGE INVESTMENTS
+# PAGE 4 — MANAGE INVESTMENTS
 # ============================================================
 elif page == "Manage Investments":
     st.header("Manage Investments")
@@ -557,7 +509,7 @@ elif page == "Manage Investments":
 
 
 # ============================================================
-# PAGE 6 — MANAGE EXPENSES
+# PAGE 5 — MANAGE EXPENSES
 # ============================================================
 elif page == "Manage Expenses":
     st.header("Manage Expenses")
