@@ -150,17 +150,12 @@ if page == "Net Worth":
 
     # P&L table — invested vs current
     st.subheader("Invested vs Current Value")
-    invested = pd.DataFrame([
-        {"account": "Moneybox (LISA)", "invested": 12000},
-        {"account": "S&S ISA",         "invested": 4000},
-        {"account": "Crypto",           "invested": 1382},  # 4025 - 2643 withdrawn
-        {"account": "Chase",            "invested": 2000},
-        {"account": "Monzo (Savings)",  "invested": 0},
-    ])
+    invested = d.load_invested_amounts()
     current = latest[["account", "amount"]].rename(columns={"amount": "current"})
-    pl = invested.merge(current, on="account", how="left")
+    pl = invested.merge(current, on="account", how="outer").fillna(0)
     pl["P&L (£)"] = pl["current"] - pl["invested"]
     pl["P&L (%)"] = (pl["P&L (£)"] / pl["invested"].replace(0, float("nan")) * 100).round(1)
+    pl = pl.sort_values("current", ascending=False).reset_index(drop=True)
 
     def color_pl(val):
         if isinstance(val, float) and val < 0:
@@ -430,14 +425,18 @@ elif page == "Manage Investments":
     with st.form("add_snapshot_form"):
         snapshot_date = st.date_input("Snapshot date", value=pd.Timestamp.today())
 
-        st.markdown("**Enter the current balance for each account:**")
+        st.markdown("**Enter the current balance for each account, and any new money paid in this month:**")
         amounts = {}
+        contributions = {}
         cols = st.columns(2)
         for i, acc in enumerate(accounts):
             default = float(latest_values.get(acc, 0.0))
             with cols[i % 2]:
                 amounts[acc] = st.number_input(
-                    acc, value=default, step=10.0, format="%.2f", key=f"amt_{acc}"
+                    f"{acc} — balance", value=default, step=10.0, format="%.2f", key=f"amt_{acc}"
+                )
+                contributions[acc] = st.number_input(
+                    f"{acc} — contribution this month", value=0.0, step=10.0, format="%.2f", key=f"contrib_{acc}"
                 )
 
         submitted = st.form_submit_button("Save Snapshot", type="primary")
@@ -445,6 +444,7 @@ elif page == "Manage Investments":
             ok, msg = d.add_manual_snapshot(snapshot_date, amounts)
             (st.success if ok else st.warning)(msg)
             if ok:
+                d.add_contributions(contributions)
                 st.cache_data.clear()
                 st.rerun()
 
@@ -478,6 +478,32 @@ elif page == "Manage Investments":
 
     st.caption("Removing an account stops it appearing in future snapshot forms — "
                "historical data for it is preserved in your charts.")
+
+    st.divider()
+
+    # --- Set total invested per account ---
+    st.subheader("Total Invested per Account")
+    st.caption("The running total of money you've put into each account. "
+               "Used for the 'Invested vs Current Value' table on the Net Worth page. "
+               "It updates automatically from the contributions entered above — "
+               "use this form to set or correct the starting total.")
+    invested_df = d.load_invested_amounts()
+    invested_values = dict(zip(invested_df["account"], invested_df["invested"]))
+    with st.form("set_invested_form"):
+        cols = st.columns(2)
+        new_invested = {}
+        for i, acc in enumerate(accounts):
+            with cols[i % 2]:
+                new_invested[acc] = st.number_input(
+                    acc, value=float(invested_values.get(acc, 0.0)), step=10.0, format="%.2f", key=f"invested_{acc}"
+                )
+        invested_submitted = st.form_submit_button("Save Invested Amounts", type="primary")
+        if invested_submitted:
+            for acc, val in new_invested.items():
+                d.set_invested_amount(acc, val)
+            st.success("Invested amounts updated.")
+            st.cache_data.clear()
+            st.rerun()
 
     st.divider()
 

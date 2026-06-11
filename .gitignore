@@ -12,4 +12,5 @@ __pycache__/
 /cash_flow.csv
 /monthly_expenses.csv
 /projections.csv
+/invested_amounts.csv
 world_cup_picker.html
