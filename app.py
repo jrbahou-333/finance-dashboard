@@ -20,24 +20,38 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-ACCOUNT_COLORS = {
-    "Moneybox (LISA)": "#4C72B0",
-    "S&S ISA":         "#55A868",
-    "Crypto":          "#F5A623",
-    "Chase":           "#8172B2",
-    "Monzo (Savings)": "#64B5CD",
-    "Monzo (Spend)":   "#CCB974",
-    "Debit (Revolut)": "#C44E52",
-    "Credit":          "#DD8452",
+PALETTES = {
+    "Seaborn": [
+        "#4C72B0", "#55A868", "#C44E52", "#8172B2", "#F5A623",
+        "#64B5CD", "#CCB974", "#DD8452", "#937860", "#DA8BC3",
+    ],
+    "Cool": [
+        "#2C5F8A", "#4A90A4", "#7FB3B0", "#A8C5D6", "#5B7FA6",
+        "#3D8B7D", "#8BA888", "#6C7B8B", "#B8A88A", "#7A6F9B",
+    ],
+    "Vibrant": [
+        "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+        "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+    ],
+    "Earthy": [
+        "#3F6F4F", "#7A8B4A", "#C9A227", "#A65E2E", "#6E5849",
+        "#94B49F", "#D4B483", "#5C8374", "#B0735C", "#8C9B6E",
+    ],
+    "Pastel": [
+        "#A8DADC", "#F4A261", "#E9C46A", "#CDB4DB", "#B5C99A",
+        "#FFB4A2", "#9DB4C0", "#E5989B", "#C9CBA3", "#A3C4BC",
+    ],
 }
 
-CATEGORY_COLORS = {
-    "Holiday/Fun": "#4C72B0",
-    "Weddings":    "#C44E52",
-    "Gifts":       "#55A868",
-    "Car":         "#F5A623",
-    "House":       "#8172B2",
-}
+PALETTE_NAME = d.get_palette_name()
+PALETTE = PALETTES.get(PALETTE_NAME, PALETTES["Pastel"])
+
+PLOTLY_TEMPLATE = "plotly_dark"
+
+
+def color_map(values):
+    """Assign a stable colour from the shared palette to each unique value."""
+    return {v: PALETTE[i % len(PALETTE)] for i, v in enumerate(sorted(set(values)))}
 
 
 def _go_to(page_value):
@@ -80,6 +94,18 @@ with st.sidebar:
     st.metric("Monthly Income", f"£{d.MONTHLY_INCOME:,}")
     st.metric("Monthly Expenses", f"£{d.MONTHLY_EXPENSES['amount'].sum():,}")
 
+    st.divider()
+
+    # Chart colour palette
+    palette_options = list(PALETTES.keys())
+    selected_palette = st.selectbox(
+        "Chart colour palette", options=palette_options,
+        index=palette_options.index(PALETTE_NAME) if PALETTE_NAME in palette_options else 0,
+    )
+    if selected_palette != PALETTE_NAME:
+        d.set_palette_name(selected_palette)
+        st.rerun()
+
 
 # ============================================================
 # PAGE 1 — NET WORTH
@@ -95,8 +121,9 @@ if page == "Net Worth":
     # Stacked area chart
     fig = go.Figure()
     accounts = [c for c in pivot.columns if c != "Total"]
+    account_colors = color_map(accounts)
     for acc in accounts:
-        color = ACCOUNT_COLORS.get(acc, "#888")
+        color = account_colors[acc]
         fig.add_trace(go.Scatter(
             x=pivot.index, y=pivot[acc],
             name=acc,
@@ -121,7 +148,7 @@ if page == "Net Worth":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.15),
         height=420,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -146,29 +173,24 @@ if page == "Net Worth":
         pos = latest[latest["amount"] > 0]
         fig2 = px.pie(
             pos, values="amount", names="account",
-            color="account", color_discrete_map=ACCOUNT_COLORS,
+            color="account", color_discrete_map=account_colors,
             hole=0.45,
         )
         fig2.update_traces(textposition="outside", textinfo="label+percent")
         fig2.update_layout(
-            showlegend=False, height=320, template="plotly_dark",
+            showlegend=False, height=320, template=PLOTLY_TEMPLATE,
             margin=dict(t=10, b=10, l=10, r=10),
         )
         st.plotly_chart(fig2, use_container_width=True)
 
     # P&L table — invested vs current
     st.subheader("Invested vs Current Value")
-    invested = pd.DataFrame([
-        {"account": "Moneybox (LISA)", "invested": 12000},
-        {"account": "S&S ISA",         "invested": 4000},
-        {"account": "Crypto",           "invested": 1382},  # 4025 - 2643 withdrawn
-        {"account": "Chase",            "invested": 2000},
-        {"account": "Monzo (Savings)",  "invested": 0},
-    ])
+    invested = d.load_invested_amounts()
     current = latest[["account", "amount"]].rename(columns={"amount": "current"})
-    pl = invested.merge(current, on="account", how="left")
+    pl = invested.merge(current, on="account", how="outer").fillna(0)
     pl["P&L (£)"] = pl["current"] - pl["invested"]
     pl["P&L (%)"] = (pl["P&L (£)"] / pl["invested"].replace(0, float("nan")) * 100).round(1)
+    pl = pl.sort_values("current", ascending=False).reset_index(drop=True)
 
     def color_pl(val):
         if isinstance(val, float) and val < 0:
@@ -182,7 +204,7 @@ if page == "Net Worth":
         .style
         .format({"Invested (£)": "£{:,.0f}", "Current (£)": "£{:,.0f}",
                  "P&L (£)": "£{:,.0f}", "P&L (%)": "{:.1f}%"})
-        .applymap(color_pl, subset=["P&L (£)", "P&L (%)"])
+        .map(color_pl, subset=["P&L (£)", "P&L (%)"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -222,14 +244,15 @@ elif page == "Cash Flow":
             )
 
     # Filled-area expenses (recurring + one-off stacked), income as a line
+    cf_colors = color_map(["Recurring Expenses", "One-off Expenses", "Income"])
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=cf["date"], y=cf["monthly_expenses"],
         name="Recurring Expenses",
         mode="lines",
         stackgroup="expenses",
-        line=dict(width=0.5, color="#4C72B0"),
-        fillcolor="#4C72B0",
+        line=dict(width=0.5, color=cf_colors["Recurring Expenses"]),
+        fillcolor=cf_colors["Recurring Expenses"],
         hovertemplate="Recurring: £%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
@@ -237,8 +260,8 @@ elif page == "Cash Flow":
         name="One-off Expenses",
         mode="lines",
         stackgroup="expenses",
-        line=dict(width=0.5, color="#C44E52"),
-        fillcolor="#C44E52",
+        line=dict(width=0.5, color=cf_colors["One-off Expenses"]),
+        fillcolor=cf_colors["One-off Expenses"],
         customdata=oo_hover_texts,
         hovertemplate=(
             "<b>One-off Expenses</b><br>%{customdata}"
@@ -249,7 +272,7 @@ elif page == "Cash Flow":
         x=cf["date"], y=cf["income"],
         name="Income",
         mode="lines+markers",
-        line=dict(color="#51cf66", width=2),
+        line=dict(color=cf_colors["Income"], width=2),
         marker=dict(size=6),
         hovertemplate="Income: £%{y:,.0f}<extra></extra>",
     ))
@@ -260,7 +283,7 @@ elif page == "Cash Flow":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.15),
         height=380,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -272,14 +295,17 @@ elif page == "Cash Flow":
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
+    category_colors = color_map(set(oo_monthly["category"]) | set(d.MONTHLY_EXPENSES["category"]))
+
     fig3 = px.bar(
         oo_monthly, x="date", y="amount", color="category",
-        color_discrete_map=CATEGORY_COLORS,
+        color_discrete_map=category_colors,
         labels={"amount": "£", "date": "", "category": "Category"},
         title="One-off Expenses by Month",
     )
+    fig3.update_traces(width=1000 * 60 * 60 * 24 * 25)  # ~25 days, so bars don't bleed into neighbouring months
     fig3.update_layout(
-        template="plotly_dark", height=300,
+        template=PLOTLY_TEMPLATE, height=300,
         legend=dict(orientation="h", y=-0.2),
         margin=dict(t=40, b=10),
         barmode="stack",
@@ -299,11 +325,12 @@ elif page == "Cash Flow":
     st.subheader("Recurring Monthly Expenses")
     fig4 = px.pie(
         d.MONTHLY_EXPENSES, values="amount", names="category",
+        color="category", color_discrete_map=category_colors,
         hole=0.4, title=f"Monthly Spend Breakdown — Total £{d.MONTHLY_EXPENSES['amount'].sum():,}",
     )
     fig4.update_traces(textposition="outside", textinfo="label+percent")
     fig4.update_layout(
-        showlegend=False, template="plotly_dark", height=340,
+        showlegend=False, template=PLOTLY_TEMPLATE, height=340,
         margin=dict(t=40, b=10, l=10, r=10),
     )
     col_a, col_b = st.columns([1, 1])
@@ -384,7 +411,7 @@ elif page == "Projection":
         hovermode="x unified",
         legend=dict(orientation="h", y=-0.12),
         height=430,
-        template="plotly_dark",
+        template=PLOTLY_TEMPLATE,
         margin=dict(t=40, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -413,7 +440,7 @@ elif page == "Projection":
             "Projected": "£{:,.0f}", "Actual": "£{:,.0f}",
             "Variance (£)": "£{:,.0f}", "Variance (%)": "{:.1f}%",
         })
-        .applymap(color_var, subset=["Variance (£)", "Variance (%)"])
+        .map(color_var, subset=["Variance (£)", "Variance (%)"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -437,14 +464,18 @@ elif page == "Manage Investments":
     with st.form("add_snapshot_form"):
         snapshot_date = st.date_input("Snapshot date", value=pd.Timestamp.today())
 
-        st.markdown("**Enter the current balance for each account:**")
+        st.markdown("**Enter the current balance for each account, and any new money paid in this month:**")
         amounts = {}
+        contributions = {}
         cols = st.columns(2)
         for i, acc in enumerate(accounts):
             default = float(latest_values.get(acc, 0.0))
             with cols[i % 2]:
                 amounts[acc] = st.number_input(
-                    acc, value=default, step=10.0, format="%.2f", key=f"amt_{acc}"
+                    f"{acc} — balance", value=default, step=10.0, format="%.2f", key=f"amt_{acc}"
+                )
+                contributions[acc] = st.number_input(
+                    f"{acc} — contribution this month", value=0.0, step=10.0, format="%.2f", key=f"contrib_{acc}"
                 )
 
         submitted = st.form_submit_button("Save Snapshot", type="primary")
@@ -452,6 +483,7 @@ elif page == "Manage Investments":
             ok, msg = d.add_manual_snapshot(snapshot_date, amounts)
             (st.success if ok else st.warning)(msg)
             if ok:
+                d.add_contributions(contributions)
                 st.cache_data.clear()
                 st.rerun()
 
@@ -488,6 +520,32 @@ elif page == "Manage Investments":
 
     st.divider()
 
+    # --- Set total invested per account ---
+    st.subheader("Total Invested per Account")
+    st.caption("The running total of money you've put into each account. "
+               "Used for the 'Invested vs Current Value' table on the Net Worth page. "
+               "It updates automatically from the contributions entered above — "
+               "use this form to set or correct the starting total.")
+    invested_df = d.load_invested_amounts()
+    invested_values = dict(zip(invested_df["account"], invested_df["invested"]))
+    with st.form("set_invested_form"):
+        cols = st.columns(2)
+        new_invested = {}
+        for i, acc in enumerate(accounts):
+            with cols[i % 2]:
+                new_invested[acc] = st.number_input(
+                    acc, value=float(invested_values.get(acc, 0.0)), step=10.0, format="%.2f", key=f"invested_{acc}"
+                )
+        invested_submitted = st.form_submit_button("Save Invested Amounts", type="primary")
+        if invested_submitted:
+            for acc, val in new_invested.items():
+                d.set_invested_amount(acc, val)
+            st.success("Invested amounts updated.")
+            st.cache_data.clear()
+            st.rerun()
+
+    st.divider()
+
     # --- Manual entries log ---
     st.subheader("Manually Added Snapshots")
     manual = d.load_manual_snapshots()
@@ -516,7 +574,7 @@ elif page == "Manage Expenses":
     st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
 
     oo = d.get_one_off_expenses()
-    ONE_OFF_CATEGORIES = sorted(set(CATEGORY_COLORS) | set(oo["category"].dropna().unique()))
+    ONE_OFF_CATEGORIES = sorted(set(d.MONTHLY_EXPENSES["category"]) | set(oo["category"].dropna().unique()))
 
     # --- Add a new one-off expense ---
     st.subheader("Add a New One-off Expense")

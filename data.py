@@ -16,6 +16,8 @@ PROJECTIONS_PATH         = "projections.csv"
 MANUAL_SNAPSHOTS_PATH    = "manual_snapshots.csv"
 ACCOUNTS_CONFIG_PATH     = "accounts_config.json"
 ONE_OFF_EXPENSES_PATH    = "one_off_expenses.csv"
+INVESTED_AMOUNTS_PATH    = "invested_amounts.csv"
+SETTINGS_PATH            = "settings.json"
 
 SAMPLE_NET_WORTH_SNAPSHOTS_PATH = "sample_data/net_worth_snapshots.csv"
 SAMPLE_CASH_FLOW_PATH           = "sample_data/cash_flow.csv"
@@ -24,6 +26,10 @@ SAMPLE_PROJECTIONS_PATH         = "sample_data/projections.csv"
 SAMPLE_MANUAL_SNAPSHOTS_PATH    = "sample_data/manual_snapshots.csv"
 SAMPLE_ACCOUNTS_CONFIG_PATH     = "sample_data/accounts_config.json"
 SAMPLE_ONE_OFF_EXPENSES_PATH    = "sample_data/one_off_expenses.csv"
+SAMPLE_INVESTED_AMOUNTS_PATH    = "sample_data/invested_amounts.csv"
+SAMPLE_SETTINGS_PATH            = "sample_data/settings.json"
+
+DEFAULT_SETTINGS = {"palette": "Pastel"}
 
 
 def _resolve(real_path, sample_path):
@@ -343,6 +349,74 @@ def remove_account(name):
     config["removed"].append(name)
     _save_account_config(config)
     return True, f'Removed "{name}" from future tracking. Historical data is kept.'
+
+
+# ---------------------------------------------------------------------------
+# INVESTED AMOUNTS — running total contributed to each account
+# ---------------------------------------------------------------------------
+_INVESTED_COLUMNS = ["account", "invested"]
+
+
+def load_invested_amounts():
+    path = _resolve(INVESTED_AMOUNTS_PATH, SAMPLE_INVESTED_AMOUNTS_PATH)
+    if os.path.exists(path):
+        df = pd.read_csv(path)
+        if not df.empty:
+            return df[_INVESTED_COLUMNS]
+    return pd.DataFrame(columns=_INVESTED_COLUMNS)
+
+
+def _save_invested_amounts(df):
+    df = df[_INVESTED_COLUMNS].sort_values("account").reset_index(drop=True)
+    df.to_csv(INVESTED_AMOUNTS_PATH, index=False)
+    return df
+
+
+def set_invested_amount(account, invested):
+    """Set the running total invested for an account (for initial setup/corrections)."""
+    df = load_invested_amounts()
+    existing = dict(zip(df["account"], df["invested"]))
+    existing[account] = float(invested)
+    df = pd.DataFrame(existing.items(), columns=_INVESTED_COLUMNS)
+    return _save_invested_amounts(df)
+
+
+def add_contributions(contributions: dict):
+    """Add the given amounts to each account's running invested total."""
+    df = load_invested_amounts()
+    existing = dict(zip(df["account"], df["invested"]))
+    for account, amount in contributions.items():
+        if amount:
+            existing[account] = existing.get(account, 0.0) + float(amount)
+    if existing:
+        df = pd.DataFrame(existing.items(), columns=_INVESTED_COLUMNS)
+        _save_invested_amounts(df)
+
+
+# ---------------------------------------------------------------------------
+# SETTINGS — user preferences (e.g. chart colour palette)
+# ---------------------------------------------------------------------------
+def load_settings():
+    path = _resolve(SETTINGS_PATH, SAMPLE_SETTINGS_PATH)
+    if os.path.exists(path):
+        with open(path) as f:
+            return {**DEFAULT_SETTINGS, **json.load(f)}
+    return dict(DEFAULT_SETTINGS)
+
+
+def save_settings(settings):
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(settings, f, indent=2)
+
+
+def get_palette_name():
+    return load_settings()["palette"]
+
+
+def set_palette_name(name):
+    settings = load_settings()
+    settings["palette"] = name
+    save_settings(settings)
 
 
 # ---------------------------------------------------------------------------
