@@ -58,11 +58,38 @@ def _load_monthly_income():
 
 
 # ---------------------------------------------------------------------------
-# MONTHLY EXPENSES
+# MONTHLY EXPENSES — editable store of recurring monthly expenses
 # ---------------------------------------------------------------------------
+_MONTHLY_EXPENSES_COLUMNS = ["category", "amount"]
+
+
 def _load_monthly_expenses():
     path = _resolve(MONTHLY_EXPENSES_PATH, SAMPLE_MONTHLY_EXPENSES_PATH)
     return pd.read_csv(path)
+
+
+def get_monthly_expenses():
+    """Recurring monthly expenses, read fresh each call so edits show up immediately."""
+    return _load_monthly_expenses()
+
+
+def _save_monthly_expenses(df):
+    df = df[_MONTHLY_EXPENSES_COLUMNS].sort_values("category").reset_index(drop=True)
+    df.to_csv(MONTHLY_EXPENSES_PATH, index=False)
+    return df
+
+
+def set_monthly_expenses(df):
+    """Replace the recurring monthly expenses with the given (category, amount) rows."""
+    df = df.dropna(subset=["category"]).copy()
+    df["category"] = df["category"].astype(str).str.strip()
+    df = df[df["category"] != ""]
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    if df["category"].duplicated().any():
+        dupes = sorted(df["category"][df["category"].duplicated()].unique())
+        return False, f'Duplicate name(s): {", ".join(dupes)}.'
+    _save_monthly_expenses(df)
+    return True, "Recurring expenses updated."
 
 
 # ---------------------------------------------------------------------------
@@ -381,16 +408,6 @@ def set_invested_amount(account, invested):
     return _save_invested_amounts(df)
 
 
-def add_contributions(contributions: dict):
-    """Add the given amounts to each account's running invested total."""
-    df = load_invested_amounts()
-    existing = dict(zip(df["account"], df["invested"]))
-    for account, amount in contributions.items():
-        if amount:
-            existing[account] = existing.get(account, 0.0) + float(amount)
-    if existing:
-        df = pd.DataFrame(existing.items(), columns=_INVESTED_COLUMNS)
-        _save_invested_amounts(df)
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +454,5 @@ def get_one_off_expenses():
 
 NET_WORTH_SNAPSHOTS = get_net_worth_snapshots()
 MONTHLY_INCOME      = _load_monthly_income()
-MONTHLY_EXPENSES    = _load_monthly_expenses()
 ONE_OFF_EXPENSES    = get_one_off_expenses()
 PROJECTIONS         = _load_projections()

@@ -43,6 +43,9 @@ PALETTES = {
     ],
 }
 
+with open("content/how_it_works.md") as f:
+    HOW_IT_WORKS = f.read()
+
 PALETTE_NAME = d.get_palette_name()
 PALETTE = PALETTES.get(PALETTE_NAME, PALETTES["Pastel"])
 
@@ -63,7 +66,12 @@ def _go_to(page_value):
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.title("Finance Dashboard")
+    title_col, info_col = st.columns([5, 1])
+    with title_col:
+        st.title("Finance Dashboard")
+    with info_col:
+        with st.popover("", icon=":material/menu_book:", help="How this dashboard works"):
+            st.markdown(HOW_IT_WORKS)
     st.caption("Jack's personal finance analytics")
     ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection"]
     MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
@@ -92,7 +100,7 @@ with st.sidebar:
     st.metric("Total Net Worth", f"£{total_nw:,.0f}", delta=f"£{delta:,.0f}" if delta else None)
     st.caption(f"As of {latest_date.strftime('%d %b %Y')}")
     st.metric("Monthly Income", f"£{d.MONTHLY_INCOME:,}")
-    st.metric("Monthly Expenses", f"£{d.MONTHLY_EXPENSES['amount'].sum():,}")
+    st.metric("Monthly Expenses", f"£{d.get_monthly_expenses()['amount'].sum():,}")
 
     st.divider()
 
@@ -216,6 +224,7 @@ elif page == "Cash Flow":
     st.header("Cash Flow")
 
     cf = d.get_cash_flow()
+    monthly_expenses = d.get_monthly_expenses()
 
     show_history = st.toggle("Show historical months", value=False)
     if not show_history:
@@ -224,8 +233,8 @@ elif page == "Cash Flow":
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Monthly Income", f"£{d.MONTHLY_INCOME:,}")
-    col2.metric("Avg Monthly Expenses", f"£{d.MONTHLY_EXPENSES['amount'].sum():,}")
-    surplus = d.MONTHLY_INCOME - d.MONTHLY_EXPENSES["amount"].sum()
+    col2.metric("Avg Monthly Expenses", f"£{monthly_expenses['amount'].sum():,}")
+    surplus = d.MONTHLY_INCOME - monthly_expenses["amount"].sum()
     col3.metric("Typical Monthly Surplus", f"£{surplus:,}")
 
     st.divider()
@@ -295,7 +304,7 @@ elif page == "Cash Flow":
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
-    category_colors = color_map(set(oo_monthly["category"]) | set(d.MONTHLY_EXPENSES["category"]))
+    category_colors = color_map(set(oo_monthly["category"]) | set(monthly_expenses["category"]))
 
     fig3 = px.bar(
         oo_monthly, x="date", y="amount", color="category",
@@ -324,9 +333,9 @@ elif page == "Cash Flow":
     # Monthly expense breakdown
     st.subheader("Recurring Monthly Expenses")
     fig4 = px.pie(
-        d.MONTHLY_EXPENSES, values="amount", names="category",
+        monthly_expenses, values="amount", names="category",
         color="category", color_discrete_map=category_colors,
-        hole=0.4, title=f"Monthly Spend Breakdown — Total £{d.MONTHLY_EXPENSES['amount'].sum():,}",
+        hole=0.4, title=f"Monthly Spend Breakdown — Total £{monthly_expenses['amount'].sum():,}",
     )
     fig4.update_traces(textposition="outside", textinfo="label+percent")
     fig4.update_layout(
@@ -337,7 +346,7 @@ elif page == "Cash Flow":
     with col_a:
         st.plotly_chart(fig4, use_container_width=True)
     with col_b:
-        exp_df = d.MONTHLY_EXPENSES.copy()
+        exp_df = monthly_expenses.copy()
         exp_df["amount"] = exp_df["amount"].map(lambda x: f"£{x:,.0f}")
         exp_df.columns = ["Category", "Monthly (£)"]
         st.dataframe(exp_df, use_container_width=True, hide_index=True)
@@ -464,9 +473,8 @@ elif page == "Manage Investments":
     with st.form("add_snapshot_form"):
         snapshot_date = st.date_input("Snapshot date", value=pd.Timestamp.today())
 
-        st.markdown("**Enter the current balance for each account, and any new money paid in this month:**")
+        st.markdown("**Enter the current balance for each account:**")
         amounts = {}
-        contributions = {}
         cols = st.columns(2)
         for i, acc in enumerate(accounts):
             default = float(latest_values.get(acc, 0.0))
@@ -474,16 +482,12 @@ elif page == "Manage Investments":
                 amounts[acc] = st.number_input(
                     f"{acc} — balance", value=default, step=10.0, format="%.2f", key=f"amt_{acc}"
                 )
-                contributions[acc] = st.number_input(
-                    f"{acc} — contribution this month", value=0.0, step=10.0, format="%.2f", key=f"contrib_{acc}"
-                )
 
         submitted = st.form_submit_button("Save Snapshot", type="primary")
         if submitted:
             ok, msg = d.add_manual_snapshot(snapshot_date, amounts)
             (st.success if ok else st.warning)(msg)
             if ok:
-                d.add_contributions(contributions)
                 st.cache_data.clear()
                 st.rerun()
 
@@ -524,8 +528,7 @@ elif page == "Manage Investments":
     st.subheader("Total Invested per Account")
     st.caption("The running total of money you've put into each account. "
                "Used for the 'Invested vs Current Value' table on the Net Worth page. "
-               "It updates automatically from the contributions entered above — "
-               "use this form to set or correct the starting total.")
+               "Update this whenever you add new contributions.")
     invested_df = d.load_invested_amounts()
     invested_values = dict(zip(invested_df["account"], invested_df["invested"]))
     with st.form("set_invested_form"):
@@ -571,13 +574,18 @@ elif page == "Manage Investments":
 # ============================================================
 elif page == "Manage Expenses":
     st.header("Manage Expenses")
+
+    monthly_expenses = d.get_monthly_expenses()
+
+    # --- One-off expenses ---
+    st.subheader("One-off Expenses")
     st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
 
     oo = d.get_one_off_expenses()
-    ONE_OFF_CATEGORIES = sorted(set(d.MONTHLY_EXPENSES["category"]) | set(oo["category"].dropna().unique()))
+    ONE_OFF_CATEGORIES = sorted(set(monthly_expenses["category"]) | set(oo["category"].dropna().unique()))
 
     # --- Add a new one-off expense ---
-    st.subheader("Add a New One-off Expense")
+    st.markdown("**Add a New One-off Expense**")
     with st.form("add_one_off_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -601,7 +609,7 @@ elif page == "Manage Expenses":
     st.divider()
 
     # --- Edit or delete an existing expense ---
-    st.subheader("Edit or Delete an Existing Expense")
+    st.markdown("**Edit or Delete an Existing Expense**")
     if oo.empty:
         st.info("No one-off expenses yet — add one above.")
     else:
@@ -646,9 +654,34 @@ elif page == "Manage Expenses":
     st.divider()
 
     # --- Full list ---
-    st.subheader("All One-off Expenses")
+    st.markdown("**All One-off Expenses**")
     display = oo.copy()
     display["date"] = display["date"].dt.strftime("%b %Y")
     display["amount"] = display["amount"].map(lambda x: f"£{x:,.0f}")
     display.columns = ["Reason", "Category", "Month", "Amount", "Note"]
     st.dataframe(display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # --- Recurring monthly expenses ---
+    st.subheader("Recurring Monthly Expenses")
+    st.caption("Edit names and amounts in-line, add or remove rows, then hit Save. "
+               "Updates immediately flow through to the Cash Flow and Projection charts.")
+
+    edited_monthly_expenses = st.data_editor(
+        monthly_expenses,
+        column_config={
+            "category": st.column_config.TextColumn("Name", required=True),
+            "amount": st.column_config.NumberColumn("Amount (£)", min_value=0.0, step=10.0, format="£%.2f", required=True),
+        },
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        key="monthly_expenses_editor",
+    )
+    if st.button("Save Recurring Expenses", type="primary"):
+        ok, msg = d.set_monthly_expenses(edited_monthly_expenses)
+        (st.success if ok else st.warning)(msg)
+        if ok:
+            st.cache_data.clear()
+            st.rerun()
