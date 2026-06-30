@@ -74,7 +74,7 @@ with st.sidebar:
             st.markdown(HOW_IT_WORKS)
     st.caption("Jack's personal finance analytics")
     ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection"]
-    MANAGE_PAGES = ["Manage Investments", "Manage Expenses"]
+    MANAGE_PAGES = ["Manage Investments", "Manage Expenses", "Manage Income"]
 
     section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
     if section == "Insights":
@@ -99,7 +99,10 @@ with st.sidebar:
 
     st.metric("Total Net Worth", f"£{total_nw:,.0f}", delta=f"£{delta:,.0f}" if delta else None)
     st.caption(f"As of {latest_date.strftime('%d %b %Y')}")
-    st.metric("Monthly Income", f"£{d.MONTHLY_INCOME:,}")
+    _current_income, _income_from = d.get_income_for_period(pd.Timestamp.today().to_period("M"))
+    st.metric("Monthly Income", f"£{int(_current_income):,}")
+    if _income_from:
+        st.caption(f"Since {_income_from.strftime('%b %Y')}")
     st.metric("Monthly Expenses", f"£{d.get_monthly_expenses()['amount'].sum():,}")
 
     st.divider()
@@ -622,3 +625,62 @@ elif page == "Manage Expenses":
         if ok:
             st.cache_data.clear()
             st.rerun()
+
+
+# ============================================================
+# PAGE 6 — MANAGE INCOME
+# ============================================================
+elif page == "Manage Income":
+    st.header("Manage Income")
+    st.caption("Each row is a salary change. The dashboard uses the most recent entry "
+               "on or before any given month, so future months automatically pick up your latest figure.")
+
+    income_df = d.load_income()
+
+    # Timeline step chart
+    if not income_df.empty:
+        chart_df = income_df.copy()
+        chart_df["from_date"] = pd.to_datetime(chart_df["from_date"])
+        # Extend the last entry to today + 2 years so the step chart fills the visible range
+        future = pd.Timestamp.today() + pd.DateOffset(years=2)
+        extended = pd.concat([
+            chart_df,
+            pd.DataFrame([{"from_date": future, "amount": chart_df.iloc[-1]["amount"]}])
+        ], ignore_index=True)
+
+        fig_inc = go.Figure()
+        fig_inc.add_trace(go.Scatter(
+            x=extended["from_date"], y=extended["amount"],
+            mode="lines+markers",
+            line=dict(color=PALETTE[0], width=2, shape="hv"),
+            marker=dict(size=8),
+            hovertemplate="From %{x|%b %Y}: £%{y:,.0f}<extra></extra>",
+        ))
+        fig_inc.update_layout(
+            title="Income Timeline",
+            xaxis_title=None,
+            yaxis_title="Monthly Income (£)",
+            yaxis=dict(tickprefix="£", tickformat=",.0f"),
+            height=260,
+            template=PLOTLY_TEMPLATE,
+            margin=dict(t=40, b=10),
+        )
+        st.plotly_chart(fig_inc, use_container_width=True)
+
+    st.subheader("Income History")
+    edited_income = st.data_editor(
+        income_df,
+        column_config={
+            "from_date": st.column_config.DateColumn("From Date", required=True),
+            "amount":    st.column_config.NumberColumn("Monthly Income (£)", min_value=0.0, step=50.0, format="£%.2f", required=True),
+        },
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        key="income_editor",
+    )
+    if st.button("Save Income", type="primary"):
+        d.save_income(edited_income)
+        st.success("Income history saved.")
+        st.cache_data.clear()
+        st.rerun()

@@ -17,6 +17,7 @@ MANUAL_SNAPSHOTS_PATH    = "manual_snapshots.csv"
 ACCOUNTS_CONFIG_PATH     = "accounts_config.json"
 ONE_OFF_EXPENSES_PATH    = "one_off_expenses.csv"
 INVESTED_AMOUNTS_PATH    = "invested_amounts.csv"
+INCOME_PATH              = "income.csv"
 SETTINGS_PATH            = "settings.json"
 
 SAMPLE_NET_WORTH_SNAPSHOTS_PATH = "sample_data/net_worth_snapshots.csv"
@@ -27,6 +28,7 @@ SAMPLE_MANUAL_SNAPSHOTS_PATH    = "sample_data/manual_snapshots.csv"
 SAMPLE_ACCOUNTS_CONFIG_PATH     = "sample_data/accounts_config.json"
 SAMPLE_ONE_OFF_EXPENSES_PATH    = "sample_data/one_off_expenses.csv"
 SAMPLE_INVESTED_AMOUNTS_PATH    = "sample_data/invested_amounts.csv"
+SAMPLE_INCOME_PATH              = "sample_data/income.csv"
 SAMPLE_SETTINGS_PATH            = "sample_data/settings.json"
 
 DEFAULT_SETTINGS = {"palette": "Pastel"}
@@ -182,11 +184,12 @@ def get_cash_flow():
     months = sorted(set(base_periods) | set(oo_periods))
     rows = []
     for m in months:
+        income, _ = get_income_for_period(m) if os.path.exists(INCOME_PATH) else (income_lookup.get(m, latest_income), None)
         rows.append({
             "date": m.to_timestamp(),
             "monthly_expenses": monthly_total,
             "one_off_expenses": float(one_off_by_month.get(m, 0)),
-            "income": income_lookup.get(m, latest_income),
+            "income": income,
         })
     df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
     df["total_expenses"] = df["monthly_expenses"] + df["one_off_expenses"]
@@ -245,7 +248,7 @@ def get_projections():
     for i in range(25):  # anchor month + 24 months forward
         period = anchor_period + i
         if i > 0:
-            income = income_lookup.get(period, latest_income)
+            income, _ = get_income_for_period(period)
             one_off = float(one_off_by_month.get(period, 0))
             cumulative += income - monthly_total - one_off
         projected_rows.append({"date": period.to_timestamp(), "projected": cumulative})
@@ -489,6 +492,53 @@ def set_palette_name(name):
     settings = load_settings()
     settings["palette"] = name
     save_settings(settings)
+
+
+def get_income_override():
+    """Return (amount, from_period) or (None, None) if no override is set."""
+    override = load_settings().get("income_override")
+    if not override:
+        return None, None
+    return float(override["amount"]), pd.Period(override["from_date"], freq="M")
+
+
+
+# ---------------------------------------------------------------------------
+# INCOME TIMELINE — editable history of income changes
+# ---------------------------------------------------------------------------
+_INCOME_COLUMNS = ["from_date", "amount"]
+
+
+def load_income():
+    path = _resolve(INCOME_PATH, SAMPLE_INCOME_PATH)
+    if os.path.exists(path):
+        df = pd.read_csv(path, parse_dates=["from_date"])
+        if not df.empty:
+            return df[_INCOME_COLUMNS].sort_values("from_date").reset_index(drop=True)
+    return pd.DataFrame(columns=_INCOME_COLUMNS)
+
+
+def save_income(df):
+    df = df.copy()
+    df["from_date"] = pd.to_datetime(df["from_date"])
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+    df = df[_INCOME_COLUMNS].sort_values("from_date").reset_index(drop=True)
+    df.to_csv(INCOME_PATH, index=False)
+
+
+def get_income_for_period(period):
+    """Return (amount, from_date) for the applicable income entry for a given pandas Period."""
+    df = load_income()
+    if df.empty:
+        return _load_monthly_income(), None
+    df = df.copy()
+    df["period"] = df["from_date"].dt.to_period("M")
+    eligible = df[df["period"] <= period].sort_values("period")
+    if eligible.empty:
+        row = df.sort_values("period").iloc[0]
+    else:
+        row = eligible.iloc[-1]
+    return float(row["amount"]), pd.Timestamp(row["from_date"])
 
 
 # ---------------------------------------------------------------------------
