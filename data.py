@@ -196,24 +196,65 @@ def _load_projections():
     return df
 
 
-# Anchor month — projection starts here and is held fixed; everything after
-# is recomputed dynamically from income, recurring expenses, and one-off
-# expenses for that month.
+def get_projections():
+    """
+    Projects net worth forward 24 months from the latest snapshot total.
+    The starting value is always the sum of the most recent net worth snapshot,
+    so the projection re-anchors automatically each time a new snapshot is added.
+    Each future month = previous month + (income - recurring expenses - one-off expenses).
+    Historical actuals (from projections.csv, synced by _sync_projection_actual) are
+    merged in for the chart but do not influence the projected line.
+    """
+    # Historical actuals
+    path = _resolve(PROJECTIONS_PATH, SAMPLE_PROJECTIONS_PATH)
+    df_csv = pd.read_csv(path, parse_dates=["date"])
+    df_csv["actual"] = pd.to_numeric(df_csv["actual"], errors="coerce")
+
+    # Anchor at latest snapshot
+    nws = get_net_worth_snapshots()
+    if nws.empty:
+        return df_csv[["date", "projected", "actual"]] if "projected" in df_csv.columns else df_csv
+
+    latest_date = nws["date"].max()
+    latest_total = float(nws[nws["date"] == latest_date]["amount"].sum())
+    anchor_period = latest_date.to_period("M")
+
+    monthly_total = _load_monthly_expenses()["amount"].sum()
+
+    cf_path = _resolve(CASH_FLOW_PATH, SAMPLE_CASH_FLOW_PATH)
+    cf_base = pd.read_csv(cf_path, parse_dates=["date"])
+    income_lookup = dict(zip(cf_base["date"].dt.to_period("M"), cf_base["income"]))
+    latest_income = float(cf_base["income"].iloc[-1]) if len(cf_base) else _load_monthly_income()
+
+    oo = load_one_off_expenses()
+    oo_periods = oo["date"].dt.to_period("M") if len(oo) else pd.Series([], dtype="period[M]")
+    one_off_by_month = oo.groupby(oo_periods)["amount"].sum() if len(oo) else pd.Series(dtype=float)
+
+    # Build 24-month forward projection
+    projected_rows = []
+    cumulative = latest_total
+    for i in range(25):  # anchor month + 24 months forward
+        period = anchor_period + i
+        if i > 0:
+            income = income_lookup.get(period, latest_income)
+            one_off = float(one_off_by_month.get(period, 0))
+            cumulative += income - monthly_total - one_off
+        projected_rows.append({"date": period.to_timestamp(), "projected": cumulative})
+
+    proj_df = pd.DataFrame(projected_rows)
+
+    # Merge with historical actuals
+    actuals = df_csv[["date", "actual"]].dropna(subset=["actual"])
+    result = proj_df.merge(actuals, on="date", how="outer")
+    return result.sort_values("date").reset_index(drop=True)
+
+
+# kept for backwards compatibility — no longer used internally
 PROJECTION_ANCHOR_DATE = pd.Timestamp("2025-07-01")
 
 
-def get_projections():
-    """
-    Projections from PROJECTION_ANCHOR_DATE onwards are recomputed live:
-    each month's projected net worth = previous month's projected net worth
-    + (income - recurring expenses - one-off expenses) for that month.
-    Months before the anchor keep their original projected values.
-
-    This means adding/editing one-off expenses immediately changes the
-    forward projection.
-    """
+def _get_projections_unused():
     df = _load_projections().sort_values("date").reset_index(drop=True)
-
     anchor_rows = df.index[df["date"] == PROJECTION_ANCHOR_DATE]
     if len(anchor_rows) == 0:
         return df

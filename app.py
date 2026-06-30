@@ -359,32 +359,37 @@ elif page == "Projection":
     st.header("Projection")
 
     proj = d.get_projections()
-    actual_known = proj.dropna(subset=["actual"])
-    latest_actual = actual_known.iloc[-1] if len(actual_known) else None
+    proj_known  = proj.dropna(subset=["projected"])
 
-    if latest_actual is not None:
+    # Actuals: total net worth per snapshot date, direct from snapshots
+    nws_totals = (
+        d.NET_WORTH_SNAPSHOTS
+        .groupby("date", as_index=False)["amount"]
+        .sum()
+        .rename(columns={"amount": "actual"})
+        .sort_values("date")
+    )
+
+    # Anchor = start of projected line (latest snapshot)
+    anchor_row   = proj_known.iloc[0]  if len(proj_known)  else None
+    proj_12m_row = proj_known.iloc[12] if len(proj_known) > 12 else proj_known.iloc[-1] if len(proj_known) else None
+    proj_24m_row = proj_known.iloc[24] if len(proj_known) > 24 else proj_known.iloc[-1] if len(proj_known) else None
+
+    if anchor_row is not None:
         col1, col2, col3 = st.columns(3)
-        col1.metric("Latest Actual Net Worth",    f"£{latest_actual['actual']:,.0f}")
-        col2.metric("Projection for Same Month",  f"£{latest_actual['projected']:,.0f}")
-        variance = latest_actual["actual"] - latest_actual["projected"]
-        col3.metric("Variance", f"£{variance:,.0f}", delta=f"{'above' if variance >= 0 else 'below'} projection")
+        col1.metric("Current Net Worth",   f"£{anchor_row['projected']:,.0f}")
+        col2.metric("Projected in 12 mo",  f"£{proj_12m_row['projected']:,.0f}",
+                    delta=f"£{proj_12m_row['projected'] - anchor_row['projected']:+,.0f}")
+        col3.metric("Projected in 24 mo",  f"£{proj_24m_row['projected']:,.0f}",
+                    delta=f"£{proj_24m_row['projected'] - anchor_row['projected']:+,.0f}")
 
     st.divider()
 
     fig = go.Figure()
 
-    # Projection line (full range)
+    # Historical actuals (total net worth per snapshot)
     fig.add_trace(go.Scatter(
-        x=proj["date"], y=proj["projected"],
-        name="Projected",
-        mode="lines",
-        line=dict(color="#4C72B0", width=2, dash="dot"),
-        hovertemplate="Projected: £%{y:,.0f}<extra></extra>",
-    ))
-
-    # Actual line (where we have data)
-    fig.add_trace(go.Scatter(
-        x=actual_known["date"], y=actual_known["actual"],
+        x=nws_totals["date"], y=nws_totals["actual"],
         name="Actual",
         mode="lines+markers",
         line=dict(color="#51cf66", width=2.5),
@@ -392,29 +397,25 @@ elif page == "Projection":
         hovertemplate="Actual: £%{y:,.0f}<extra></extra>",
     ))
 
-    # Variance fill between projected and actual
-    merged = proj.dropna(subset=["actual"]).copy()
+    # Forward projection (starts at latest snapshot)
     fig.add_trace(go.Scatter(
-        x=pd.concat([merged["date"], merged["date"][::-1]]),
-        y=pd.concat([merged["projected"], merged["actual"][::-1]]),
-        fill="toself",
-        fillcolor="rgba(200,80,80,0.15)",
-        line=dict(color="rgba(0,0,0,0)"),
-        name="Gap",
-        hoverinfo="skip",
-        showlegend=True,
+        x=proj_known["date"], y=proj_known["projected"],
+        name="Projected",
+        mode="lines",
+        line=dict(color="#4C72B0", width=2, dash="dot"),
+        hovertemplate="Projected: £%{y:,.0f}<extra></extra>",
     ))
 
-    # Projection start marker
-    if latest_actual is not None:
+    # Vertical line at projection start
+    if anchor_row is not None:
         fig.add_vline(
-            x=latest_actual["date"].timestamp() * 1000,
+            x=anchor_row["date"].timestamp() * 1000,
             line_dash="dash", line_color="white", opacity=0.3,
             annotation_text="→ forecast", annotation_position="top right",
         )
 
     fig.update_layout(
-        title="Net Worth: Projected vs Actual",
+        title="Net Worth: Historical & Projected",
         xaxis_title=None,
         yaxis_title="Net Worth (£)",
         hovermode="x unified",
@@ -425,33 +426,25 @@ elif page == "Projection":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Monthly variance table
-    st.subheader("Month-by-Month Variance")
-    tbl = proj.dropna(subset=["actual"]).copy()
-    tbl["variance"] = tbl["actual"] - tbl["projected"]
-    tbl["variance_%"] = (tbl["variance"] / tbl["projected"] * 100).round(1)
-    tbl["date"] = tbl["date"].dt.strftime("%b %Y")
+    # Forward projection table
+    st.subheader("Forward Projection")
+    fwd = proj_known[["date", "projected"]].copy()
+    fwd["month_label"] = fwd["date"].dt.strftime("%b %Y")
 
-    def color_var(val):
+    def color_proj(val):
         try:
-            num = float(str(val).replace("£","").replace(",","").replace("%",""))
-            return "color: #ff6b6b" if num < 0 else "color: #51cf66"
+            num = float(str(val).replace("£", "").replace(",", ""))
+            return "color: #51cf66" if num >= 0 else "color: #ff6b6b"
         except Exception:
             return ""
 
-    styled = (
-        tbl.rename(columns={
-            "date": "Month", "projected": "Projected", "actual": "Actual",
-            "variance": "Variance (£)", "variance_%": "Variance (%)",
-        })
+    fwd_styled = (
+        fwd[["month_label", "projected"]]
+        .rename(columns={"month_label": "Month", "projected": "Projected Net Worth"})
         .style
-        .format({
-            "Projected": "£{:,.0f}", "Actual": "£{:,.0f}",
-            "Variance (£)": "£{:,.0f}", "Variance (%)": "{:.1f}%",
-        })
-        .map(color_var, subset=["Variance (£)", "Variance (%)"])
+        .format({"Projected Net Worth": "£{:,.0f}"})
     )
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(fwd_styled, use_container_width=True, hide_index=True)
 
 
 # ============================================================
