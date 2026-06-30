@@ -16,7 +16,27 @@ st.set_page_config(
 st.markdown("""
 <style>
     [data-testid="stMetricValue"] { font-size: 1.6rem; }
-    .block-container { padding-top: 1.5rem; }
+    .block-container { padding-top: 2.5rem; }
+
+    /* Outer tabs: styled as group labels, not interactive */
+    div[data-testid="stTabs"]:has(> div > div[role="tablist"] > button[id*="tab-0"][aria-label="Visualisations"],
+                                   > div > div[role="tablist"] > button[id*="tab-0"][aria-label="Manage Data"])
+    > div > div[role="tablist"] > button {
+        pointer-events: none;
+        cursor: default !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        color: #888 !important;
+        padding-bottom: 6px !important;
+    }
+    /* Suppress the active underline on outer group tabs */
+    div[data-testid="stTabs"]:has(> div > div[role="tablist"] > button[aria-label="Visualisations"])
+    > div > div[role="tablist"] {
+        border-bottom: none !important;
+        gap: 2rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,11 +77,6 @@ def color_map(values):
     return {v: PALETTE[i % len(PALETTE)] for i, v in enumerate(sorted(set(values)))}
 
 
-def _go_to(page_value):
-    st.session_state["nav_section"] = "Manage Data"
-    st.session_state["nav_page_manage"] = page_value
-
-
 # ============================================================
 # SIDEBAR
 # ============================================================
@@ -73,14 +88,6 @@ with st.sidebar:
         with st.popover("", icon=":material/menu_book:", help="How this dashboard works"):
             st.markdown(HOW_IT_WORKS)
     st.caption("Jack's personal finance analytics")
-    ANALYTICS_PAGES = ["Net Worth", "Cash Flow", "Projection"]
-    MANAGE_PAGES = ["Manage Investments", "Manage Expenses", "Manage Income"]
-
-    section = st.radio("Section", ["Insights", "Manage Data"], label_visibility="collapsed", horizontal=True, key="nav_section")
-    if section == "Insights":
-        page = st.radio("Navigate", ANALYTICS_PAGES, label_visibility="collapsed", key="nav_page_insights")
-    else:
-        page = st.radio("Navigate", MANAGE_PAGES, label_visibility="collapsed", key="nav_page_manage")
     st.divider()
 
     # Quick stats
@@ -119,9 +126,20 @@ with st.sidebar:
 
 
 # ============================================================
-# PAGE 1 — NET WORTH
+# TABS — outer tabs are label-only (pointer-events: none)
 # ============================================================
-if page == "Net Worth":
+group_vis, group_manage = st.tabs(["Visualisations", "Manage Data"])
+
+with group_vis:
+    tab_nw, tab_cf, tab_proj = st.tabs(["Net Worth", "Cash Flow", "Projection"])
+
+with group_manage:
+    tab_inv, tab_exp, tab_inc = st.tabs(["Investments", "Expenses", "Income"])
+
+# ============================================================
+# TAB 1 — NET WORTH
+# ============================================================
+with tab_nw:
     st.header("Net Worth")
 
     df = nws.copy()
@@ -167,9 +185,7 @@ if page == "Net Worth":
     # Latest breakdown
     col1, col2 = st.columns([1, 1])
     with col1:
-        sub_hdr, sub_btn = st.columns([2, 1])
-        sub_hdr.subheader("Latest Snapshot")
-        sub_btn.button("+ Update balances", on_click=_go_to, args=("Manage Investments",), use_container_width=True, type="primary")
+        st.subheader("Latest Snapshot")
         latest_df = (
             nws[nws["date"] == latest_date]
             .set_index("account")[["amount"]]
@@ -221,9 +237,9 @@ if page == "Net Worth":
 
 
 # ============================================================
-# PAGE 2 — CASH FLOW
+# TAB 2 — CASH FLOW
 # ============================================================
-elif page == "Cash Flow":
+with tab_cf:
     st.header("Cash Flow")
 
     cf = d.get_cash_flow()
@@ -301,9 +317,7 @@ elif page == "Cash Flow":
     st.plotly_chart(fig, use_container_width=True)
 
     # One-off expense timeline
-    col_hdr, col_btn = st.columns([4, 1])
-    col_hdr.subheader("Upcoming One-off Expenses")
-    col_btn.button("+ Add / edit", on_click=_go_to, args=("Manage Expenses",), use_container_width=True, type="primary")
+    st.subheader("Upcoming One-off Expenses")
     oo = d.get_one_off_expenses().copy()
     oo_monthly = oo.groupby(["date", "category"])["amount"].sum().reset_index()
 
@@ -356,9 +370,9 @@ elif page == "Cash Flow":
 
 
 # ============================================================
-# PAGE 3 — PROJECTION
+# TAB 3 — PROJECTION
 # ============================================================
-elif page == "Projection":
+with tab_proj:
     st.header("Projection")
 
     proj = d.get_projections()
@@ -451,9 +465,9 @@ elif page == "Projection":
 
 
 # ============================================================
-# PAGE 4 — MANAGE INVESTMENTS
+# TAB 4 — INVESTMENTS
 # ============================================================
-elif page == "Manage Investments":
+with tab_inv:
     st.header("Manage Investments")
     st.caption("Add this month's balances, and add or remove tracked accounts. "
                "Entries are saved alongside the app and merged with your Excel history — "
@@ -567,9 +581,9 @@ elif page == "Manage Investments":
 
 
 # ============================================================
-# PAGE 5 — MANAGE EXPENSES
+# TAB 5 — EXPENSES
 # ============================================================
-elif page == "Manage Expenses":
+with tab_exp:
     st.header("Manage Expenses")
 
     monthly_expenses = d.get_monthly_expenses()
@@ -628,9 +642,9 @@ elif page == "Manage Expenses":
 
 
 # ============================================================
-# PAGE 6 — MANAGE INCOME
+# TAB 6 — INCOME
 # ============================================================
-elif page == "Manage Income":
+with tab_inc:
     st.header("Manage Income")
     st.caption("Each row is a salary change. The dashboard uses the most recent entry "
                "on or before any given month, so future months automatically pick up your latest figure.")
