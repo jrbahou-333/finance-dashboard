@@ -484,6 +484,25 @@ elif page == "Manage Investments":
                 st.cache_data.clear()
                 st.rerun()
 
+    # --- Manual entries log (collapsed by default) ---
+    manual = d.load_manual_snapshots()
+    with st.expander(f"Manually Added Snapshots ({len(manual['date'].unique()) if not manual.empty else 0})", expanded=False):
+        if manual.empty:
+            st.info("No manual snapshots added yet — use the form above to add your first one.")
+        else:
+            manual_pivot = manual.pivot_table(index="date", columns="account", values="amount", aggfunc="sum")
+            manual_pivot.index = manual_pivot.index.strftime("%d %b %Y")
+            st.dataframe(manual_pivot.style.format("£{:,.0f}"), use_container_width=True)
+
+            dates_available = sorted(manual["date"].dt.strftime("%Y-%m-%d").unique(), reverse=True)
+            with st.form("delete_snapshot_form"):
+                del_date = st.selectbox("Delete a manual snapshot by date", options=dates_available)
+                del_submitted = st.form_submit_button("Delete Snapshot", type="secondary")
+                if del_submitted:
+                    d.delete_manual_snapshot(del_date)
+                    st.success(f"Deleted manual snapshot for {del_date}.")
+                    st.rerun()
+
     st.divider()
 
     # --- Add / remove tracked accounts ---
@@ -517,49 +536,31 @@ elif page == "Manage Investments":
 
     st.divider()
 
-    # --- Set total invested per account ---
+    # --- Total invested per account ---
     st.subheader("Total Invested per Account")
-    st.caption("The running total of money you've put into each account. "
-               "Used for the 'Invested vs Current Value' table on the Net Worth page. "
-               "Update this whenever you add new contributions.")
+    st.caption("Running total contributed to each account — used for the Invested vs Current Value table.")
     invested_df = d.load_invested_amounts()
-    invested_values = dict(zip(invested_df["account"], invested_df["invested"]))
-    with st.form("set_invested_form"):
-        cols = st.columns(2)
-        new_invested = {}
-        for i, acc in enumerate(accounts):
-            with cols[i % 2]:
-                new_invested[acc] = st.number_input(
-                    acc, value=float(invested_values.get(acc, 0.0)), step=10.0, format="%.2f", key=f"invested_{acc}"
-                )
-        invested_submitted = st.form_submit_button("Save Invested Amounts", type="primary")
-        if invested_submitted:
-            for acc, val in new_invested.items():
-                d.set_invested_amount(acc, val)
-            st.success("Invested amounts updated.")
-            st.cache_data.clear()
-            st.rerun()
-
-    st.divider()
-
-    # --- Manual entries log ---
-    st.subheader("Manually Added Snapshots")
-    manual = d.load_manual_snapshots()
-    if manual.empty:
-        st.info("No manual snapshots added yet — use the form above to add your first one.")
-    else:
-        manual_pivot = manual.pivot_table(index="date", columns="account", values="amount", aggfunc="sum")
-        manual_pivot.index = manual_pivot.index.strftime("%d %b %Y")
-        st.dataframe(manual_pivot.style.format("£{:,.0f}"), use_container_width=True)
-
-        dates_available = sorted(manual["date"].dt.strftime("%Y-%m-%d").unique(), reverse=True)
-        with st.form("delete_snapshot_form"):
-            del_date = st.selectbox("Delete a manual snapshot by date", options=dates_available)
-            del_submitted = st.form_submit_button("Delete Snapshot", type="secondary")
-            if del_submitted:
-                d.delete_manual_snapshot(del_date)
-                st.success(f"Deleted manual snapshot for {del_date}.")
-                st.rerun()
+    # Ensure all active accounts appear
+    existing_invested = dict(zip(invested_df["account"], invested_df["invested"]))
+    invested_display = pd.DataFrame([
+        {"account": acc, "invested": float(existing_invested.get(acc, 0.0))}
+        for acc in accounts
+    ])
+    edited_invested = st.data_editor(
+        invested_display,
+        column_config={
+            "account":  st.column_config.TextColumn("Account", disabled=True),
+            "invested": st.column_config.NumberColumn("Total Invested (£)", min_value=0.0, step=10.0, format="£%.2f"),
+        },
+        use_container_width=True,
+        hide_index=True,
+        key="invested_editor",
+    )
+    if st.button("Save Invested Amounts", type="primary"):
+        d.set_all_invested_amounts(edited_invested)
+        st.success("Invested amounts updated.")
+        st.cache_data.clear()
+        st.rerun()
 
 
 # ============================================================
@@ -572,87 +573,30 @@ elif page == "Manage Expenses":
 
     # --- One-off expenses ---
     st.subheader("One-off Expenses")
-    st.caption("Add, edit, or delete upcoming one-off expenses (holidays, weddings, car costs, house costs, etc.). ")
+    st.caption("Add, edit, or delete rows inline, then hit Save.")
 
     oo = d.get_one_off_expenses()
     ONE_OFF_CATEGORIES = sorted(set(monthly_expenses["category"]) | set(oo["category"].dropna().unique()))
 
-    # --- Add a new one-off expense ---
-    st.markdown("**Add a New One-off Expense**")
-    with st.form("add_one_off_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            new_reason = st.text_input("Reason", placeholder="e.g. Friend's wedding")
-            new_category = st.selectbox("Category", options=ONE_OFF_CATEGORIES)
-            new_date = st.date_input("Month", value=pd.Timestamp.today())
-        with c2:
-            new_amount = st.number_input("Amount (£)", min_value=0.0, step=10.0, format="%.2f")
-            new_note = st.text_input("Note (optional)")
-        add_oo_submitted = st.form_submit_button("Add Expense", type="primary")
-        if add_oo_submitted:
-            if not new_reason.strip():
-                st.warning("Please enter a reason.")
-            else:
-                d.add_one_off_expense(new_reason.strip(), new_category,
-                                      new_date.replace(day=1), new_amount, new_note.strip() or None)
-                st.success(f'Added "{new_reason.strip()}" — £{new_amount:,.0f} in {new_date.strftime("%b %Y")}.')
-                st.cache_data.clear()
-                st.rerun()
-
-    st.divider()
-
-    # --- Edit or delete an existing expense ---
-    st.markdown("**Edit or Delete an Existing Expense**")
-    if oo.empty:
-        st.info("No one-off expenses yet — add one above.")
-    else:
-        options = {
-            idx: f'{row["reason"]} — £{row["amount"]:,.0f} ({row["date"].strftime("%b %Y")})'
-            for idx, row in oo.iterrows()
-        }
-        selected_id = st.selectbox(
-            "Select an expense", options=list(options.keys()),
-            format_func=lambda i: options[i], key="edit_oo_select",
-        )
-        sel = oo.loc[selected_id]
-
-        with st.form("edit_one_off_form"):
-            c1, c2 = st.columns(2)
-            with c1:
-                edit_reason = st.text_input("Reason", value=sel["reason"])
-                cat_idx = ONE_OFF_CATEGORIES.index(sel["category"]) if sel["category"] in ONE_OFF_CATEGORIES else 0
-                edit_category = st.selectbox("Category", options=ONE_OFF_CATEGORIES, index=cat_idx)
-                edit_date = st.date_input("Month", value=sel["date"].to_pydatetime())
-            with c2:
-                edit_amount = st.number_input("Amount (£)", min_value=0.0, step=10.0,
-                                               format="%.2f", value=float(sel["amount"]))
-                edit_note = st.text_input("Note (optional)", value=sel["note"] or "")
-
-            bcol1, bcol2 = st.columns(2)
-            save_clicked = bcol1.form_submit_button("Save Changes", type="primary")
-            delete_clicked = bcol2.form_submit_button("Delete Expense")
-
-            if save_clicked:
-                d.update_one_off_expense(selected_id, edit_reason.strip(), edit_category,
-                                         edit_date.replace(day=1), edit_amount, edit_note.strip() or None)
-                st.success("Expense updated.")
-                st.cache_data.clear()
-                st.rerun()
-            if delete_clicked:
-                d.delete_one_off_expense(selected_id)
-                st.success(f'Deleted "{sel["reason"]}".')
-                st.cache_data.clear()
-                st.rerun()
-
-    st.divider()
-
-    # --- Full list ---
-    st.markdown("**All One-off Expenses**")
-    display = oo.copy()
-    display["date"] = display["date"].dt.strftime("%b %Y")
-    display["amount"] = display["amount"].map(lambda x: f"£{x:,.0f}")
-    display.columns = ["Reason", "Category", "Month", "Amount", "Note"]
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    edited_oo = st.data_editor(
+        oo,
+        column_config={
+            "reason":   st.column_config.TextColumn("Reason", required=True),
+            "category": st.column_config.SelectboxColumn("Category", options=ONE_OFF_CATEGORIES, required=True),
+            "date":     st.column_config.DateColumn("Date", required=True),
+            "amount":   st.column_config.NumberColumn("Amount (£)", min_value=0.0, step=10.0, format="£%.2f", required=True),
+            "note":     st.column_config.TextColumn("Note"),
+        },
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        key="one_off_editor",
+    )
+    if st.button("Save One-off Expenses", type="primary"):
+        d.set_one_off_expenses(edited_oo)
+        st.success("One-off expenses saved.")
+        st.cache_data.clear()
+        st.rerun()
 
     st.divider()
 

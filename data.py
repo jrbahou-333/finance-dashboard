@@ -146,6 +146,15 @@ def delete_one_off_expense(row_id):
     return True
 
 
+def set_one_off_expenses(df):
+    """Replace the entire one-off expenses store with the given DataFrame."""
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+    df["note"] = df["note"].where(df["note"].notna(), None)
+    _save_one_off_expenses(df[_ONE_OFF_COLUMNS])
+
+
 # ---------------------------------------------------------------------------
 # CASH FLOW — recomputed live from monthly expenses + editable one-off store
 # ---------------------------------------------------------------------------
@@ -449,6 +458,11 @@ def set_invested_amount(account, invested):
     return _save_invested_amounts(df)
 
 
+def set_all_invested_amounts(df):
+    """Replace the entire invested amounts store with the given DataFrame."""
+    df = df.copy()
+    df["invested"] = pd.to_numeric(df["invested"], errors="coerce").fillna(0)
+    _save_invested_amounts(df[_INVESTED_COLUMNS])
 
 
 # ---------------------------------------------------------------------------
